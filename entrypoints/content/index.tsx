@@ -556,32 +556,43 @@ export default defineContentScript({
 
     // --- Page Scanner ---
     const scanAndTranslatePage = () => {
-        // Use TreeWalker to scan text blocks. 
+        // Tag list for identifying Block Elements
+        const blockTags = ['P', 'DIV', 'LI', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'BLOCKQUOTE', 'PRE', 'ADDRESS', 'ARTICLE', 'ASIDE', 'FIGCAPTION', 'TD', 'TH', 'DD', 'DT'];
+
+        // Use TreeWalker to scan elements
         const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT, {
              acceptNode: (node) => {
                  const el = node as HTMLElement;
-                 const tagsToSkip = ['SCRIPT', 'STYLE', 'NOSCRIPT', 'IFRAME', 'SVG', 'IMG', 'INPUT', 'TEXTAREA', 'CODE', 'PRE', 'HEAD', 'META', 'BUTTON'];
+                 // 1. Skip technical/hidden tags
+                 const tagsToSkip = ['SCRIPT', 'STYLE', 'NOSCRIPT', 'IFRAME', 'SVG', 'IMG', 'INPUT', 'TEXTAREA', 'CODE', 'HEAD', 'META', 'BUTTON', 'LINK', 'MAP', 'OBJECT', 'VIDEO', 'AUDIO'];
                  if (tagsToSkip.includes(el.tagName)) return NodeFilter.FILTER_REJECT;
                  
                  if (el.isContentEditable) return NodeFilter.FILTER_REJECT;
                  if (el.closest('[data-context-lingo-container]')) return NodeFilter.FILTER_REJECT;
-                 
-                 // Skip if already processed or pending
                  if (el.hasAttribute('data-context-lingo-scanned')) return NodeFilter.FILTER_REJECT;
-
-                 // Optimization: Skip invisible elements (basic check)
                  if (el.offsetParent === null) return NodeFilter.FILTER_REJECT;
 
-                 // Check for direct Chinese text nodes
-                 let hasDirectChinese = false;
-                 for (let i = 0; i < el.childNodes.length; i++) {
-                     const n = el.childNodes[i];
-                     if (n.nodeType === Node.TEXT_NODE && (n.nodeValue || '').trim().length > 0 && /[\u4e00-\u9fa5]/.test(n.nodeValue || '')) {
-                         hasDirectChinese = true;
-                         break;
-                     }
+                 // 2. Must be a Block Element
+                 if (!blockTags.includes(el.tagName)) {
+                     // e.g. SPAN, A, B. We skip them to avoid inserting DIVs (translations) inside inline elements.
+                     // The walker will continue to their children, but since they are inline, their text will be picked up by the parent block's innerText check if that parent is accepted.
+                     return NodeFilter.FILTER_SKIP; 
                  }
-                 return hasDirectChinese ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP;
+
+                 // 3. Must contain Chinese text
+                 const text = el.innerText;
+                 if (!text || !/[\u4e00-\u9fa5]/.test(text)) {
+                     return NodeFilter.FILTER_SKIP;
+                 }
+
+                 // 4. Must be a "Leaf Block" (contains no other Block elements)
+                 // This ensures we don't translate a container DIV *and* its inner P, avoiding double processing.
+                 // We query for any descendant that matches our block tag list.
+                 if (el.querySelector(blockTags.join(','))) {
+                     return NodeFilter.FILTER_SKIP;
+                 }
+
+                 return NodeFilter.FILTER_ACCEPT;
              }
         });
 
