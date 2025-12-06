@@ -6,6 +6,8 @@ import { Upload, Download, Filter, Settings2, List, Search, Plus, Trash2, CheckS
 import { MergeConfigModal } from './word-manager/MergeConfigModal';
 import { AddWordModal } from './word-manager/AddWordModal';
 import { WordList } from './word-manager/WordList';
+import { Toast, ToastMessage } from './ui/Toast';
+import { entriesStorage } from '../utils/storage';
 
 const Tooltip: React.FC<{ text: string; children: React.ReactNode }> = ({ text, children }) => {
   return (
@@ -35,6 +37,9 @@ export const WordManager: React.FC<WordManagerProps> = ({ scenarios, entries, se
   const [isMergeModalOpen, setIsMergeModalOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   
+  // Toast State
+  const [toast, setToast] = useState<ToastMessage | null>(null);
+
   // Configs
   const [showConfig, setShowConfig] = useState({
     showPhonetic: true,
@@ -54,6 +59,10 @@ export const WordManager: React.FC<WordManagerProps> = ({ scenarios, entries, se
       setSelectedScenarioId('all');
     }
   }, [scenarios, selectedScenarioId]);
+
+  const showToast = (message: string, type: 'success' | 'error' | 'warning' | 'info' = 'success') => {
+      setToast({ id: Date.now(), message, type });
+  };
 
   // Helper: Check if word exists in Known (Text + Translation must match strictly for the "Same Word" concept)
   const existsInKnown = (text: string, translation: string) => {
@@ -165,6 +174,7 @@ export const WordManager: React.FC<WordManagerProps> = ({ scenarios, entries, se
     if (confirm(`确定从当前列表删除选中的 ${selectedWords.size} 个单词吗？`)) {
       setEntries(prev => prev.filter(e => !selectedWords.has(e.id)));
       setSelectedWords(new Set());
+      showToast('删除成功', 'success');
     }
   };
 
@@ -179,6 +189,7 @@ export const WordManager: React.FC<WordManagerProps> = ({ scenarios, entries, se
       });
       setEntries(newEntries);
       setSelectedWords(new Set()); // Clear selection after move
+      showToast('移动成功', 'success');
   };
 
   const handleExport = () => {
@@ -192,6 +203,7 @@ export const WordManager: React.FC<WordManagerProps> = ({ scenarios, entries, se
      a.click();
      document.body.removeChild(a);
      URL.revokeObjectURL(url);
+     showToast('导出成功', 'success');
   };
 
   const triggerImport = () => {
@@ -272,14 +284,14 @@ export const WordManager: React.FC<WordManagerProps> = ({ scenarios, entries, se
         if (validEntries.length > 0) {
             setEntries(prev => [...prev, ...validEntries]);
             let msg = `成功导入 ${validEntries.length} 个单词。`;
-            if (duplicateCount > 0) msg += `\n有 ${duplicateCount} 个单词因已在当前列表中而跳过。`;
-            if (conflictCount > 0) msg += `\n有 ${conflictCount} 个单词因与互斥列表冲突（如已掌握 vs 正在学）而跳过。`;
-            alert(msg);
+            if (duplicateCount > 0) msg += ` (跳过 ${duplicateCount} 个重复)`;
+            if (conflictCount > 0) msg += ` (跳过 ${conflictCount} 个互斥冲突)`;
+            showToast(msg, 'success');
         } else {
             if (conflictCount > 0 || duplicateCount > 0) {
-                alert(`没有导入任何新词。\n${duplicateCount} 个重复，${conflictCount} 个冲突。`);
+                showToast(`导入失败: ${duplicateCount} 个重复，${conflictCount} 个冲突`, 'warning');
             } else {
-                alert('未能解析有效单词或文件为空。');
+                showToast('未能解析有效单词或文件为空', 'error');
             }
         }
      };
@@ -288,14 +300,17 @@ export const WordManager: React.FC<WordManagerProps> = ({ scenarios, entries, se
   };
 
   const handleAddWord = (text: string, translation: string) => {
-     if (!text) return;
+     if (!text) {
+         showToast('请输入单词拼写', 'warning');
+         return;
+     }
 
      const targetCategory = activeTab === 'all' ? WordCategory.WantToLearnWord : activeTab;
 
      // 1. Logic for adding to Want/Learning -> Check Known
      if (targetCategory === WordCategory.WantToLearnWord || targetCategory === WordCategory.LearningWord) {
          if (existsInKnown(text, translation)) {
-             alert('该单词（及释义）已存在于“已掌握”列表中，无法重复添加为新词。');
+             showToast('该单词已在“已掌握”列表中，无法重复添加。', 'error');
              return;
          }
      }
@@ -305,9 +320,20 @@ export const WordManager: React.FC<WordManagerProps> = ({ scenarios, entries, se
          const existing = findInLearningOrWant(text, translation);
          if (existing) {
              const categoryName = existing.category === WordCategory.WantToLearnWord ? '想学习' : '正在学';
-             alert(`该单词已在“${categoryName}”列表中。\n\n请前往该列表将其“移至已掌握”，而不是重复新建。\n(或者，请先从${categoryName}列表中删除该词)`);
+             showToast(`该单词已在“${categoryName}”中。请前往该列表将其“移至已掌握”，勿重复新建。`, 'error');
              return;
          }
+     }
+     
+     // 3. Check duplicate in current category (Basic check)
+     const existsInTarget = entries.some(e => 
+        e.category === targetCategory && 
+        e.text.toLowerCase().trim() === text.toLowerCase().trim() &&
+        e.translation?.trim() === translation.trim()
+     );
+     if (existsInTarget) {
+         showToast('该单词已存在于当前列表中', 'warning');
+         return;
      }
 
      const entry: WordEntry = {
@@ -321,7 +347,9 @@ export const WordManager: React.FC<WordManagerProps> = ({ scenarios, entries, se
         phoneticUs: ''
      };
      setEntries(prev => [entry, ...prev]);
-     setIsAddModalOpen(false);
+     
+     showToast('添加成功', 'success');
+     setIsAddModalOpen(false); // Auto close modal on success
   };
 
   const handleDragStart = (index: number) => setDraggedItemIndex(index);
@@ -342,6 +370,9 @@ export const WordManager: React.FC<WordManagerProps> = ({ scenarios, entries, se
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col relative min-h-[600px]">
       <input type="file" ref={fileInputRef} className="hidden" accept=".json,.txt" onChange={handleImportFile} />
+
+      {/* Global Toast Container */}
+      <Toast toast={toast} onClose={() => setToast(null)} />
 
       <div className="border-b border-slate-200 px-6 py-5 bg-slate-50 rounded-t-xl flex justify-between items-center flex-wrap gap-4">
         <div>
