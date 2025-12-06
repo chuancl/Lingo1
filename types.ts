@@ -130,7 +130,7 @@ export interface WordInteractionConfig {
   mainTrigger: InteractionTrigger;
   quickAddTrigger: InteractionTrigger;
   
-  bubblePosition: BubblePosition; // New field
+  bubblePosition: BubblePosition;
 
   showPhonetic: boolean;
   showOriginalText: boolean; 
@@ -180,6 +180,7 @@ export interface AutoTranslateConfig {
   enabled: boolean;
   blacklist: string[];
   whitelist: string[];
+  ttsSpeed: number;
 }
 
 export interface MergeStrategyConfig {

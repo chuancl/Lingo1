@@ -1,11 +1,13 @@
 
+
+
 import ReactDOM from 'react-dom/client';
 import React, { useState, useEffect, useRef } from 'react';
 import { PageWidget } from '../../components/PageWidget';
 import { WordBubble } from '../../components/WordBubble';
 import '../../index.css'; 
 import { entriesStorage, pageWidgetConfigStorage, autoTranslateConfigStorage, stylesStorage, originalTextConfigStorage, enginesStorage, interactionConfigStorage } from '../../utils/storage';
-import { WordEntry, PageWidgetConfig, WordInteractionConfig, WordCategory } from '../../types';
+import { WordEntry, PageWidgetConfig, WordInteractionConfig, WordCategory, AutoTranslateConfig } from '../../types';
 import { defineContentScript } from 'wxt/sandbox';
 import { createShadowRootUi } from 'wxt/client';
 import { findFuzzyMatches } from '../../utils/matching';
@@ -17,11 +19,18 @@ interface ContentOverlayProps {
   initialWidgetConfig: PageWidgetConfig;
   initialEntries: WordEntry[];
   initialInteractionConfig: WordInteractionConfig;
+  initialAutoTranslateConfig: AutoTranslateConfig; // New Prop
 }
 
-const ContentOverlay: React.FC<ContentOverlayProps> = ({ initialWidgetConfig, initialEntries, initialInteractionConfig }) => {
+const ContentOverlay: React.FC<ContentOverlayProps> = ({ 
+    initialWidgetConfig, 
+    initialEntries, 
+    initialInteractionConfig,
+    initialAutoTranslateConfig 
+}) => {
   const [widgetConfig, setWidgetConfig] = useState(initialWidgetConfig);
   const [interactionConfig, setInteractionConfig] = useState(initialInteractionConfig);
+  const [autoTranslateConfig, setAutoTranslateConfig] = useState(initialAutoTranslateConfig); // New State
   const [entries, setEntries] = useState(initialEntries);
   
   // Widget Logic
@@ -41,7 +50,8 @@ const ContentOverlay: React.FC<ContentOverlayProps> = ({ initialWidgetConfig, in
     const unsubs = [
         pageWidgetConfigStorage.watch(v => v && setWidgetConfig(v)),
         interactionConfigStorage.watch(v => v && setInteractionConfig(v)),
-        entriesStorage.watch(v => v && setEntries(v))
+        entriesStorage.watch(v => v && setEntries(v)),
+        autoTranslateConfigStorage.watch(v => v && setAutoTranslateConfig(v)) // Watch config
     ];
 
     const pageContent = document.body.innerText;
@@ -179,6 +189,7 @@ const ContentOverlay: React.FC<ContentOverlayProps> = ({ initialWidgetConfig, in
           onMouseEnter={handleBubbleMouseEnter}
           onMouseLeave={handleBubbleMouseLeave}
           onAddWord={handleAddWordToLearning}
+          ttsSpeed={autoTranslateConfig.ttsSpeed} // Pass TTS Speed
        />
     </div>
   );
@@ -485,6 +496,7 @@ export default defineContentScript({
                     initialWidgetConfig={currentWidgetConfig}
                     initialEntries={currentEntries}
                     initialInteractionConfig={currentInteractionConfig}
+                    initialAutoTranslateConfig={currentAutoTranslate}
                 />
             </React.StrictMode>
         );

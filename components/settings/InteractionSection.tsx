@@ -1,8 +1,10 @@
 
 
+
 import React from 'react';
 import { WordInteractionConfig, InteractionTrigger, ModifierKey, MouseAction, BubblePosition } from '../../types';
 import { Volume2, Info, ArrowUp, ArrowDown, ArrowLeft, ArrowRight } from 'lucide-react';
+import { playTextToSpeech } from '../../utils/audio';
 
 const Tooltip: React.FC<{ text: string; children: React.ReactNode }> = ({ text, children }) => {
   return (
@@ -128,6 +130,38 @@ export const InteractionSection: React.FC<InteractionSectionProps> = ({ config, 
                     value={config.quickAddTrigger} 
                     onChange={(val) => setConfig({...config, quickAddTrigger: val})}
                 />
+
+                {/* Auto Pronounce Settings */}
+                <div className="bg-slate-50 p-4 rounded-lg border border-slate-100">
+                   <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 block">自动朗读设置</label>
+                   <div className="flex gap-4 items-end">
+                      <div className="flex-1">
+                        <label className="text-[10px] text-slate-500 mb-1 block">默认口音</label>
+                        <select 
+                          value={config.autoPronounceAccent} 
+                          onChange={(e) => setConfig({...config, autoPronounceAccent: e.target.value as 'US' | 'UK'})}
+                          className="w-full text-sm border-slate-300 rounded-lg focus:ring-blue-500"
+                        >
+                          <option value="US">美式 (US)</option>
+                          <option value="UK">英式 (UK)</option>
+                        </select>
+                      </div>
+                      <div className="flex-1">
+                        <label className="text-[10px] text-slate-500 mb-1 block">气泡显示时朗读次数</label>
+                        <div className="flex items-center">
+                           <input 
+                             type="number" 
+                             min="0"
+                             max="5"
+                             value={config.autoPronounceCount} 
+                             onChange={(e) => setConfig({...config, autoPronounceCount: parseInt(e.target.value), autoPronounce: parseInt(e.target.value) > 0})}
+                             className="w-full text-sm border-slate-300 rounded-lg focus:ring-blue-500"
+                           />
+                        </div>
+                      </div>
+                   </div>
+                   <p className="text-[10px] text-slate-400 mt-2">* 设置为 0 则不自动朗读。</p>
+                </div>
               </div>
 
               <div className="border-t border-slate-100 pt-6">
@@ -172,7 +206,13 @@ export const InteractionSection: React.FC<InteractionSectionProps> = ({ config, 
                              <h4 className="font-bold text-xl text-slate-900 leading-tight mb-1">ephemeral</h4>
                              {config.showPhonetic && <span className="text-xs text-slate-400 font-mono block">/əˈfem(ə)rəl/</span>}
                           </div>
-                          <button className="text-slate-400 hover:text-blue-600 p-1 rounded-full"><Volume2 className="w-4 h-4"/></button>
+                          <button 
+                              className="text-slate-400 hover:text-blue-600 p-1 rounded-full transition-colors"
+                              onClick={() => playTextToSpeech("ephemeral", config.autoPronounceAccent, 1.0, 1)}
+                              title="点击播放 (使用当前口音)"
+                          >
+                              <Volume2 className="w-4 h-4"/>
+                          </button>
                        </div>
                        
                        {config.showDictTranslation && (
@@ -187,7 +227,7 @@ export const InteractionSection: React.FC<InteractionSectionProps> = ({ config, 
                        )}
 
                        {config.showDictExample && (
-                          <div className="text-xs text-slate-600 italic border-l-2 border-blue-400 pl-3 py-0.5 leading-relaxed">
+                          <div className="text-xs text-slate-600 italic border-l-2 border-blue-400 pl-3 py-0.5 leading-relaxed cursor-pointer hover:text-blue-600" onClick={() => playTextToSpeech("Her success was ephemeral", config.autoPronounceAccent)}>
                              Her success was ephemeral.
                           </div>
                        )}

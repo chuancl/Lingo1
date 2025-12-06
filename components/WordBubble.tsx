@@ -1,4 +1,6 @@
 
+
+
 import React, { useEffect, useState, useRef } from 'react';
 import { WordEntry, WordInteractionConfig, WordCategory } from '../types';
 import { Volume2, Plus, Check } from 'lucide-react';
@@ -13,6 +15,7 @@ interface WordBubbleProps {
   onMouseEnter: () => void;
   onMouseLeave: () => void;
   onAddWord: (id: string) => void;
+  ttsSpeed?: number; // Optional prop for global speed setting
 }
 
 export const WordBubble: React.FC<WordBubbleProps> = ({ 
@@ -23,18 +26,35 @@ export const WordBubble: React.FC<WordBubbleProps> = ({
     isVisible, 
     onMouseEnter, 
     onMouseLeave,
-    onAddWord
+    onAddWord,
+    ttsSpeed = 1.0
 }) => {
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
   const [placedSide, setPlacedSide] = useState<'top' | 'bottom' | 'left' | 'right'>('top');
   const bubbleRef = useRef<HTMLDivElement>(null);
   const [isAdded, setIsAdded] = useState(false);
+  const hasAutoPlayedRef = useRef(false);
 
   useEffect(() => {
     if (entry) {
         setIsAdded(entry.category === WordCategory.LearningWord || entry.category === WordCategory.KnownWord);
     }
   }, [entry]);
+
+  // Reset auto-play flag when entry changes or becomes hidden
+  useEffect(() => {
+     if (!isVisible || !entry) {
+         hasAutoPlayedRef.current = false;
+     }
+  }, [isVisible, entry]);
+
+  // Handle Auto Pronounce
+  useEffect(() => {
+      if (isVisible && entry && config.autoPronounceCount > 0 && !hasAutoPlayedRef.current) {
+          playTextToSpeech(entry.text, config.autoPronounceAccent, ttsSpeed, config.autoPronounceCount);
+          hasAutoPlayedRef.current = true;
+      }
+  }, [isVisible, entry, config.autoPronounceCount, config.autoPronounceAccent, ttsSpeed]);
 
   const handleAdd = (e: React.MouseEvent) => {
       e.stopPropagation();
@@ -47,7 +67,11 @@ export const WordBubble: React.FC<WordBubbleProps> = ({
   const playAudio = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!entry) return;
-    playTextToSpeech(entry.text, config.autoPronounceAccent);
+    playTextToSpeech(entry.text, config.autoPronounceAccent, ttsSpeed, 1);
+  };
+
+  const playSentence = (text: string) => {
+     playTextToSpeech(text, config.autoPronounceAccent, ttsSpeed, 1);
   };
 
   useEffect(() => {
@@ -249,8 +273,12 @@ export const WordBubble: React.FC<WordBubbleProps> = ({
       borderLeft: '3px solid #60a5fa', 
       paddingLeft: '12px', 
       marginTop: '4px',
-      lineHeight: '1.5'
+      lineHeight: '1.5',
+      cursor: 'pointer' // Add cursor pointer to indicate clickability
   };
+
+  // Helper for hover effects via onMouseEnter/Leave on individual elements isn't ideal with inline styles in React without state.
+  // Kept simple for now.
 
   return (
     <div 
@@ -302,8 +330,13 @@ export const WordBubble: React.FC<WordBubbleProps> = ({
             </div>
         )}
 
+        {/* Clickable Sentences */}
         {config.showDictExample && entry.dictionaryExample && (
-            <div style={exampleStyle}>
+            <div 
+                style={exampleStyle} 
+                onClick={() => playSentence(entry.dictionaryExample!)}
+                title="点击朗读例句"
+            >
                 {entry.dictionaryExample}
             </div>
         )}
