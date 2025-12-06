@@ -182,7 +182,8 @@ export interface PageWidgetConfig {
 
 export interface AutoTranslateConfig {
   enabled: boolean;
-  bilingualMode: boolean; // New: Enable bilingual paragraph display
+  bilingualMode: boolean; 
+  translateWholePage: boolean; // New setting for scanning scope
   blacklist: string[];
   whitelist: string[];
   ttsSpeed: number;

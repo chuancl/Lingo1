@@ -559,35 +559,52 @@ export default defineContentScript({
         // Tag list for identifying Block Elements
         const blockTags = ['P', 'DIV', 'LI', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'BLOCKQUOTE', 'PRE', 'ADDRESS', 'ARTICLE', 'ASIDE', 'FIGCAPTION', 'TD', 'TH', 'DD', 'DT'];
 
+        // Determine Root and Strategy based on configuration
+        let rootElement = document.body;
+        // Default (translateWholePage = false) means "Main Content Only"
+        let isMainContentSearch = !currentAutoTranslate.translateWholePage;
+        
+        if (isMainContentSearch) {
+             // Try to find a specific main container for more focused scanning
+             const mainCandidate = document.querySelector('article') || document.querySelector('main') || document.querySelector('[role="main"]');
+             if (mainCandidate) {
+                 rootElement = mainCandidate as HTMLElement;
+             }
+        }
+
         // Use TreeWalker to scan elements
-        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT, {
+        const walker = document.createTreeWalker(rootElement, NodeFilter.SHOW_ELEMENT, {
              acceptNode: (node) => {
                  const el = node as HTMLElement;
-                 // 1. Skip technical/hidden tags
-                 const tagsToSkip = ['SCRIPT', 'STYLE', 'NOSCRIPT', 'IFRAME', 'SVG', 'IMG', 'INPUT', 'TEXTAREA', 'CODE', 'HEAD', 'META', 'BUTTON', 'LINK', 'MAP', 'OBJECT', 'VIDEO', 'AUDIO'];
-                 if (tagsToSkip.includes(el.tagName)) return NodeFilter.FILTER_REJECT;
+                 // 1. Technical Skips (Always skip)
+                 const technicalTags = ['SCRIPT', 'STYLE', 'NOSCRIPT', 'IFRAME', 'SVG', 'IMG', 'INPUT', 'TEXTAREA', 'CODE', 'HEAD', 'META', 'BUTTON', 'LINK', 'MAP', 'OBJECT', 'VIDEO', 'AUDIO'];
+                 if (technicalTags.includes(el.tagName)) return NodeFilter.FILTER_REJECT;
                  
                  if (el.isContentEditable) return NodeFilter.FILTER_REJECT;
                  if (el.closest('[data-context-lingo-container]')) return NodeFilter.FILTER_REJECT;
                  if (el.hasAttribute('data-context-lingo-scanned')) return NodeFilter.FILTER_REJECT;
                  if (el.offsetParent === null) return NodeFilter.FILTER_REJECT;
 
-                 // 2. Must be a Block Element
+                 // 2. Structural/Navigational Skips (Skip if "Main Content Only" mode)
+                 // If searching whole page, we include these. If only main content, we exclude these noisy areas.
+                 if (isMainContentSearch) {
+                     const structuralTags = ['HEADER', 'FOOTER', 'NAV', 'ASIDE', 'MENU', 'DIALOG'];
+                     if (structuralTags.includes(el.tagName)) return NodeFilter.FILTER_REJECT;
+                 }
+
+                 // 3. Must be a Block Element
                  if (!blockTags.includes(el.tagName)) {
                      // e.g. SPAN, A, B. We skip them to avoid inserting DIVs (translations) inside inline elements.
-                     // The walker will continue to their children, but since they are inline, their text will be picked up by the parent block's innerText check if that parent is accepted.
                      return NodeFilter.FILTER_SKIP; 
                  }
 
-                 // 3. Must contain Chinese text
+                 // 4. Must contain Chinese text
                  const text = el.innerText;
                  if (!text || !/[\u4e00-\u9fa5]/.test(text)) {
                      return NodeFilter.FILTER_SKIP;
                  }
 
-                 // 4. Must be a "Leaf Block" (contains no other Block elements)
-                 // This ensures we don't translate a container DIV *and* its inner P, avoiding double processing.
-                 // We query for any descendant that matches our block tag list.
+                 // 5. Must be a "Leaf Block" (contains no other Block elements)
                  if (el.querySelector(blockTags.join(','))) {
                      return NodeFilter.FILTER_SKIP;
                  }
