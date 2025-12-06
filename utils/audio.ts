@@ -1,47 +1,80 @@
 
 
-let voicesLoadedPromise: Promise<SpeechSynthesisVoice[]> | null = null;
+let cachedVoices: SpeechSynthesisVoice[] = [];
+let isLoaded = false;
 
-const getVoices = (): Promise<SpeechSynthesisVoice[]> => {
-  // If voices are already available, return them immediately
+/**
+ * Preloads voices as early as possible.
+ * Chrome often returns empty voices synchronously on first load, so we hook into onvoiceschanged.
+ */
+export const preloadVoices = () => {
   const synth = window.speechSynthesis;
-  const currentVoices = synth.getVoices();
   
-  if (currentVoices.length > 0) {
-    return Promise.resolve(currentVoices);
+  const updateVoices = () => {
+    const voices = synth.getVoices();
+    if (voices.length > 0) {
+      cachedVoices = voices;
+      isLoaded = true;
+    }
+  };
+
+  updateVoices();
+  
+  if (synth.onvoiceschanged !== undefined) {
+    synth.onvoiceschanged = updateVoices;
+  }
+};
+
+/**
+ * Stops all currently playing audio and clears the queue.
+ */
+export const stopAudio = () => {
+  const synth = window.speechSynthesis;
+  synth.cancel();
+};
+
+/**
+ * Waits for voices to be loaded (with timeout fallback).
+ */
+const waitForVoices = (): Promise<SpeechSynthesisVoice[]> => {
+  if (isLoaded && cachedVoices.length > 0) {
+    return Promise.resolve(cachedVoices);
   }
 
-  // If we are already waiting, return the existing promise
-  if (voicesLoadedPromise) {
-    return voicesLoadedPromise;
-  }
-
-  // Otherwise, create a new promise waiting for 'voiceschanged'
-  voicesLoadedPromise = new Promise((resolve) => {
-    const handler = () => {
-      const voices = synth.getVoices();
-      if (voices.length > 0) {
-        synth.removeEventListener('voiceschanged', handler);
+  return new Promise((resolve) => {
+    const synth = window.speechSynthesis;
+    
+    // Check again immediately
+    const voices = synth.getVoices();
+    if (voices.length > 0) {
+        cachedVoices = voices;
+        isLoaded = true;
         resolve(voices);
-        voicesLoadedPromise = null; // Clear promise so we check fresh next time if needed
+        return;
+    }
+
+    const handler = () => {
+      const v = synth.getVoices();
+      if (v.length > 0) {
+        cachedVoices = v;
+        isLoaded = true;
+        synth.removeEventListener('voiceschanged', handler);
+        resolve(v);
       }
     };
+
     synth.addEventListener('voiceschanged', handler);
 
-    // Fallback timeout in case event never fires (some browsers/environments)
+    // Ultimate fallback if voiceschanged never fires (e.g. some Linux/VM envs)
     setTimeout(() => {
-        synth.removeEventListener('voiceschanged', handler);
-        resolve(synth.getVoices());
-        voicesLoadedPromise = null;
+      synth.removeEventListener('voiceschanged', handler);
+      resolve(synth.getVoices());
     }, 2000);
   });
-
-  return voicesLoadedPromise;
 };
 
 /**
  * Plays text using the browser's SpeechSynthesis API.
- * Waits for voices to load before speaking to fix "first time silent" bug.
  * 
  * @param text The text to speak
  * @param accent 'US' or 'UK'
@@ -53,31 +86,29 @@ export const playTextToSpeech = async (text: string, accent: 'US' | 'UK' = 'US',
 
   const synth = window.speechSynthesis;
 
-  // Try to resume if stuck (Chrome quirk)
+  // 1. Force Clean Slate: Stop any previous word immediately.
+  // This ensures moving from Word A to Word B cuts off Word A instantly.
+  synth.cancel();
+
+  // Try to resume if paused (Chrome quirk)
   if (synth.paused) {
     synth.resume();
   }
 
-  // Cancel pending
-  synth.cancel();
-
   try {
-      // Wait for voices to be ready
-      const voices = await getVoices();
+      const voices = await waitForVoices();
       
-      // Determine preferred language tag
       const langTag = accent === 'UK' ? 'en-GB' : 'en-US';
       
       // Find best matching voice
-      // Priority: Exact region match > General 'en' match > First available
       const targetVoice = voices.find(v => v.lang === langTag) || 
                           voices.find(v => v.lang.startsWith(langTag)) || 
                           voices.find(v => v.lang.startsWith('en'));
 
+      // 2. Queue the new utterances
       for (let i = 0; i < repeat; i++) {
         const utterance = new SpeechSynthesisUtterance(text);
         
-        // Strict rate clamping
         const safeRate = Math.max(0.1, Math.min(10, rate)); 
         utterance.rate = safeRate;
         utterance.pitch = 1.0;
@@ -86,18 +117,14 @@ export const playTextToSpeech = async (text: string, accent: 'US' | 'UK' = 'US',
             utterance.voice = targetVoice;
             utterance.lang = targetVoice.lang;
         } else {
-            // Fallback if no voice object found
             utterance.lang = langTag;
         }
         
         utterance.onerror = (e) => {
-          console.error('TTS Error:', e);
+           console.error('TTS Error:', e);
         };
 
         synth.speak(utterance);
-
-        // Optional: Add a pause utterance between repeats if needed, 
-        // but typically speak queue handles strictly sequential playback.
       }
   } catch (err) {
       console.error("Failed to load voices or play audio", err);

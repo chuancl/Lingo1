@@ -1,10 +1,12 @@
 
 
 
+
+
 import React, { useEffect, useState, useRef } from 'react';
 import { WordEntry, WordInteractionConfig, WordCategory } from '../types';
 import { Volume2, Plus, Check } from 'lucide-react';
-import { playTextToSpeech } from '../utils/audio';
+import { playTextToSpeech, stopAudio } from '../utils/audio';
 
 interface WordBubbleProps {
   entry: WordEntry | null;
@@ -41,12 +43,13 @@ export const WordBubble: React.FC<WordBubbleProps> = ({
     }
   }, [entry]);
 
-  // Reset auto-play flag when entry changes or becomes hidden
+  // Stop audio immediately if bubble becomes invisible
   useEffect(() => {
-     if (!isVisible || !entry) {
-         hasAutoPlayedRef.current = false;
-     }
-  }, [isVisible, entry]);
+    if (!isVisible) {
+      stopAudio();
+      hasAutoPlayedRef.current = false;
+    }
+  }, [isVisible]);
 
   // Handle Auto Pronounce
   useEffect(() => {

@@ -1,6 +1,8 @@
 
 
 
+
+
 import ReactDOM from 'react-dom/client';
 import React, { useState, useEffect, useRef } from 'react';
 import { PageWidget } from '../../components/PageWidget';
@@ -13,6 +15,7 @@ import { createShadowRootUi } from 'wxt/client';
 import { findFuzzyMatches } from '../../utils/matching';
 import { buildReplacementHtml } from '../../utils/dom-builder';
 import { browser } from 'wxt/browser';
+import { preloadVoices } from '../../utils/audio';
 
 // --- Overlay App Component (Manages Widget & Bubbles) ---
 interface ContentOverlayProps {
@@ -202,6 +205,9 @@ export default defineContentScript({
 
   async main(ctx) {
     console.log('ContextLingo: Content Script Initializing on', window.location.href);
+
+    // 0. Preload voices immediately
+    preloadVoices();
 
     // 1. Load State
     let currentEntries = await entriesStorage.getValue();
