@@ -1,4 +1,5 @@
 
+
 import React from 'react';
 import { WordEntry, WordCategory, MergeStrategyConfig, WordTab } from '../../types';
 import { PlayCircle, MapPin, ExternalLink, Filter } from 'lucide-react';
@@ -95,7 +96,7 @@ export const WordList: React.FC<WordListProps> = ({
                                       <div 
                                         key={`${entry.id}-context`} 
                                         className="bg-slate-50 p-3.5 rounded-lg border border-slate-100 relative group/ctx cursor-pointer hover:bg-slate-100 transition"
-                                        onClick={() => playTextToSpeech(entry.contextSentence!, 'US', ttsSpeed)}
+                                        onClick={(e) => { e.stopPropagation(); playTextToSpeech(entry.contextSentence!, 'US', ttsSpeed); }}
                                         title="点击朗读例句"
                                       >
                                         <div className="absolute left-0 top-3 w-1 h-8 bg-blue-500 rounded-r"></div>
@@ -120,7 +121,7 @@ export const WordList: React.FC<WordListProps> = ({
                                        <div 
                                           key={`${entry.id}-mixed`} 
                                           className="bg-slate-50 p-3.5 rounded-lg border border-slate-100 relative cursor-pointer hover:bg-slate-100 transition"
-                                          onClick={() => playTextToSpeech(entry.mixedSentence!, 'US', ttsSpeed)}
+                                          onClick={(e) => { e.stopPropagation(); playTextToSpeech(entry.mixedSentence!, 'US', ttsSpeed); }}
                                           title="点击朗读例句"
                                        >
                                           <div className="absolute left-0 top-3 w-1 h-8 bg-purple-500 rounded-r"></div>
@@ -134,7 +135,7 @@ export const WordList: React.FC<WordListProps> = ({
                                         <div 
                                             key={`${entry.id}-dictionary`} 
                                             className="bg-slate-50 p-3.5 rounded-lg border border-slate-100 relative cursor-pointer hover:bg-slate-100 transition"
-                                            onClick={() => playTextToSpeech(entry.dictionaryExample!, 'US', ttsSpeed)}
+                                            onClick={(e) => { e.stopPropagation(); playTextToSpeech(entry.dictionaryExample!, 'US', ttsSpeed); }}
                                             title="点击朗读例句"
                                         >
                                           <div className="absolute left-0 top-3 w-1 h-8 bg-emerald-500 rounded-r"></div>
