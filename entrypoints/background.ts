@@ -38,31 +38,99 @@ export default defineBackground(() => {
 
       for (const dict of enabledDicts) {
           try {
+              // --- 1. ICBA (Kingsoft) - High Priority China Source ---
+              if (dict.id === 'iciba') {
+                  const key = "D2AE3342306915865405466432026857"; // Open public key for ICBA API
+                  const res = await fetch(`https://dict-co.iciba.com/api/dictionary.php?w=${word}&type=json&key=${key}`);
+                  if (!res.ok) continue;
+                  
+                  const data = await res.json();
+                  // Check valid response
+                  if (!data || !data.symbols || data.symbols.length === 0) continue;
+
+                  const symbol = data.symbols[0];
+                  
+                  // Extract Example
+                  let example = "";
+                  // Try to find a good example from 'sent' (sentences)
+                  if (data.sent && data.sent.length > 0) {
+                      const ex = data.sent[0];
+                      example = ex.orig ? ex.orig.trim() : "";
+                  }
+
+                  return {
+                      phoneticUs: symbol.ph_am ? `/${symbol.ph_am}/` : '',
+                      phoneticUk: symbol.ph_en ? `/${symbol.ph_en}/` : '',
+                      example: example
+                  };
+              }
+
+              // --- 2. Youdao (NetEase) - China Source ---
+              if (dict.id === 'youdao') {
+                  // Using jsonapi which is richer
+                  const res = await fetch(`https://dict.youdao.com/jsonapi?q=${word}`);
+                  if (!res.ok) continue;
+
+                  const data = await res.json();
+                  
+                  let phoneticUs = "";
+                  let phoneticUk = "";
+                  let example = "";
+
+                  // Youdao structure varies (ec, simple, etc)
+                  if (data.simple && data.simple.word && data.simple.word.length > 0) {
+                      const w = data.simple.word[0];
+                      if(w['usphone']) phoneticUs = `/${w['usphone']}/`;
+                      if(w['ukphone']) phoneticUk = `/${w['ukphone']}/`;
+                  }
+                  
+                  // Fallback to 'ec' part if simple missing
+                  if (!phoneticUs && data.ec && data.ec.word && data.ec.word.length > 0) {
+                      const w = data.ec.word[0];
+                      if(w['usphone']) phoneticUs = `/${w['usphone']}/`;
+                      if(w['ukphone']) phoneticUk = `/${w['ukphone']}/`;
+                  }
+
+                  // Find examples in 'blng_sents_part' (bilingual sentences) or 'auth_sents_part'
+                  if (data.blng_sents_part && data.blng_sents_part['sentence-pair']) {
+                      const pairs = data.blng_sents_part['sentence-pair'];
+                      if (pairs.length > 0) {
+                          example = pairs[0].sentence || "";
+                      }
+                  }
+
+                  if (phoneticUs || phoneticUk || example) {
+                      return { phoneticUs, phoneticUk, example };
+                  }
+                  // If nothing found in Youdao, continue
+              }
+
+              // --- 3. Free Dictionary API (Google) - Blocked in China ---
               if (dict.id === 'free-dict') {
                   const res = await fetch(`${dict.endpoint}${word}`);
-                  if (!res.ok) continue; // Try next if 404
+                  if (!res.ok) continue; 
                   const data = await res.json();
                   if (!Array.isArray(data) || data.length === 0) continue;
                   
                   const entry = data[0];
+                  // Robust phonetic extraction
+                  const usPhonetic = entry.phonetics?.find((p: any) => p.audio?.includes('-us.mp3') || p.text)?.text || entry.phonetic || '';
+                  const ukPhonetic = entry.phonetics?.find((p: any) => p.audio?.includes('-uk.mp3'))?.text || '';
+
                   return {
-                      phoneticUs: entry.phonetics?.find((p: any) => p.audio?.includes('-us.mp3'))?.text || entry.phonetic || '',
-                      phoneticUk: entry.phonetics?.find((p: any) => p.audio?.includes('-uk.mp3'))?.text || '',
-                      // Extract first valid example from meanings
+                      phoneticUs: usPhonetic,
+                      phoneticUk: ukPhonetic,
                       example: entry.meanings?.[0]?.definitions?.find((d: any) => d.example)?.example || ''
                   };
               } 
               
+              // --- 4. Wiktionary (Fallback) ---
               if (dict.id === 'wiktionary') {
-                   // Fallback to Wiktionary (Simple API call, robust parsing omitted for brevity, usually needs HTML parsing)
-                   // Since user wants redundancy, we can just hit the API and verify it exists
+                   // Fallback to Wiktionary (Simple API call, robust parsing omitted for brevity)
+                   // Just checking existence for now as a last resort
                    const res = await fetch(`${dict.endpoint}${word}`);
                    if (!res.ok) continue;
-                   // Wiktionary JSON structure is complex. For failover, we might just confirm existence 
-                   // or implement a basic parser later. For now, if Free Dictionary fails, 
-                   // we might return empty to avoid breaking flow with bad data.
-                   // NOTE: Real implementation would parse 'en.wiktionary.org' HTML or Rest API.
-                   console.log(`Fallback to Wiktionary for ${word} (Not fully parsed in this demo)`);
+                   console.log(`Fallback to Wiktionary for ${word} (Parsing not fully implemented)`);
                    continue; 
               }
           } catch (e) {
@@ -139,10 +207,14 @@ export default defineBackground(() => {
              const trans = res.Response?.TargetText || preferredTranslation || "API Error";
              
              // 3. Merge
+             // Use US phonetic as fallback for both if one missing, or empty string
+             const pUs = dictData?.phoneticUs || '';
+             const pUk = dictData?.phoneticUk || pUs; // Fallback to US if UK missing
+
              const result = {
                  text: text,
-                 phoneticUs: dictData?.phoneticUs || '', 
-                 phoneticUk: dictData?.phoneticUk || '',
+                 phoneticUs: pUs,
+                 phoneticUk: pUk,
                  meanings: [
                      {
                          translation: trans,

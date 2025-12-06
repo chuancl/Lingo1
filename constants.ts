@@ -1,5 +1,4 @@
 
-
 import { StyleConfig, WordCategory, Scenario, TranslationEngine, WordInteractionConfig, PageWidgetConfig, AnkiConfig, OriginalTextConfig, MergeStrategyConfig, AutoTranslateConfig, DictionaryEngine } from './types';
 
 export const DEFAULT_STYLE: StyleConfig = {
@@ -74,20 +73,36 @@ export const INITIAL_ENGINES: TranslationEngine[] = [
 
 export const INITIAL_DICTIONARIES: DictionaryEngine[] = [
   { 
+    id: 'iciba', 
+    name: '金山词霸 (ICBA)', 
+    endpoint: 'https://dict-co.iciba.com/api/dictionary.php', 
+    isEnabled: true, 
+    priority: 1,
+    description: '国内访问速度快，数据详实，包含英/美音标及双语例句。'
+  },
+  { 
+    id: 'youdao', 
+    name: '有道词典 (Youdao)', 
+    endpoint: 'https://dict.youdao.com/jsonapi', 
+    isEnabled: true, 
+    priority: 2,
+    description: '网易出品，国内访问稳定，词库量大。'
+  },
+  { 
     id: 'free-dict', 
     name: 'Free Dictionary API', 
     endpoint: 'https://api.dictionaryapi.dev/api/v2/entries/en/', 
     isEnabled: true, 
-    priority: 1,
-    description: 'Google 官方推荐的免费英文词典源，提供音标、音频和丰富例句。'
+    priority: 3,
+    description: 'Google 官方推荐，由于网络原因国内可能无法访问 (Failover)。'
   },
   { 
     id: 'wiktionary', 
-    name: 'Wiktionary API (Failover)', 
+    name: 'Wiktionary API', 
     endpoint: 'https://en.wiktionary.org/api/rest_v1/page/definition/', 
     isEnabled: true, 
-    priority: 2,
-    description: '维基词典，作为备用数据源，提供基础释义支持。'
+    priority: 4,
+    description: '维基词典，纯英文释义，国内访问不稳定。'
   }
 ];
 

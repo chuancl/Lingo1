@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { TranslationEngine, EngineType, DictionaryEngine } from '../../types';
 import { Plus, GripVertical, RefreshCw, CheckCircle, WifiOff, Trash2, Globe, BrainCircuit, X, Book } from 'lucide-react';
 import { callTencentTranslation } from '../../utils/api';
+import { dictionariesStorage } from '../../utils/storage';
 
 // Simple Tooltip component internal to section
 const Tooltip: React.FC<{ text: string; children: React.ReactNode }> = ({ text, children }) => {
@@ -56,6 +57,16 @@ export const EnginesSection: React.FC<EnginesSectionProps> = ({ engines, setEngi
   
   const handleDeleteEngine = (id: string) => {
     setEngines(prev => prev.filter(e => e.id !== id));
+  };
+
+  const toggleDictionary = async (id: string) => {
+      const updated = dictionaries.map(d => d.id === id ? { ...d, isEnabled: !d.isEnabled } : d);
+      // We need to update parent state, but EnginesSection currently receives `dictionaries` as prop.
+      // Ideally App.tsx should pass setDictionaries, but for now we can update storage directly 
+      // and let the storage listener in App.tsx update the UI. 
+      // However, to make UI responsive immediately, we might need a local refresh or reloading page.
+      // BETTER: Update storage, and because App.tsx uses storage hook/listener, it will propagate down.
+      await dictionariesStorage.setValue(updated);
   };
 
   const testConnection = async (id: string) => {
@@ -241,22 +252,26 @@ export const EnginesSection: React.FC<EnginesSectionProps> = ({ engines, setEngi
                 词典数据源 (Dictionary Sources)
             </h3>
             <p className="text-xs text-slate-500 mb-4">
-                当新增单词时，系统会自动从以下免费词典 API 补充音标、例句和详细释义。默认启用且不可关闭，作为标准翻译引擎的补充。
+                当新增单词时，系统会自动从以下免费词典 API 补充音标、例句和详细释义。建议开启国内可用的数据源 (ICBA/Youdao) 以获得最佳体验。
             </p>
             <div className="space-y-3">
                 {dictionaries.map(dict => (
-                    <div key={dict.id} className="flex items-start gap-3 p-3 bg-white border border-slate-200 rounded-lg shadow-sm">
+                    <div key={dict.id} className={`flex items-start gap-3 p-3 border rounded-lg shadow-sm transition-all ${dict.isEnabled ? 'bg-white border-slate-200' : 'bg-slate-100 border-slate-100 opacity-70'}`}>
                          <div className="pt-0.5">
-                            <input type="checkbox" checked={dict.isEnabled} disabled className="rounded text-blue-600 w-4 h-4 opacity-70 cursor-not-allowed" />
+                            <input 
+                              type="checkbox" 
+                              checked={dict.isEnabled} 
+                              onChange={() => toggleDictionary(dict.id)}
+                              className="rounded text-blue-600 w-4 h-4 cursor-pointer" 
+                            />
                          </div>
                          <div>
                              <div className="flex items-center gap-2">
                                 <span className="text-sm font-bold text-slate-800">{dict.name}</span>
-                                {dict.id === 'free-dict' && <span className="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded border border-blue-100">首选 (Primary)</span>}
-                                {dict.id === 'wiktionary' && <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200">备用 (Failover)</span>}
+                                {dict.priority === 1 && <span className="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded border border-blue-100">首选 (Primary)</span>}
+                                {dict.priority > 2 && <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200">备用 (Fallback)</span>}
                              </div>
                              <div className="text-xs text-slate-500 mt-1">{dict.description}</div>
-                             <div className="text-[10px] text-slate-400 mt-1 font-mono truncate max-w-[400px]">{dict.endpoint}</div>
                          </div>
                     </div>
                 ))}
