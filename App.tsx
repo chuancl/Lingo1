@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { Dashboard } from './components/Dashboard';
@@ -7,9 +8,9 @@ import { VisualStylesSection } from './components/StyleEditor';
 import { ScenariosSection, EnginesSection, InteractionSection, AnkiSection, PageWidgetSection, GeneralSection } from './components/Settings';
 import { PreviewSection } from './components/settings/PreviewSection'; // Import standalone Preview
 import { Loader2 } from 'lucide-react';
-import { AppView, SettingSectionId, Scenario, WordEntry, PageWidgetConfig, WordInteractionConfig, TranslationEngine, AnkiConfig, AutoTranslateConfig, StyleConfig, WordCategory, OriginalTextConfig } from './types';
-import { DEFAULT_STYLES, DEFAULT_ORIGINAL_TEXT_CONFIG, DEFAULT_WORD_INTERACTION, DEFAULT_PAGE_WIDGET, INITIAL_ENGINES, DEFAULT_ANKI_CONFIG, DEFAULT_AUTO_TRANSLATE, INITIAL_SCENARIOS } from './constants';
-import { entriesStorage, scenariosStorage, pageWidgetConfigStorage, autoTranslateConfigStorage, enginesStorage, ankiConfigStorage, seedInitialData, stylesStorage, originalTextConfigStorage, interactionConfigStorage } from './utils/storage';
+import { AppView, SettingSectionId, Scenario, WordEntry, PageWidgetConfig, WordInteractionConfig, TranslationEngine, AnkiConfig, AutoTranslateConfig, StyleConfig, WordCategory, OriginalTextConfig, DictionaryEngine } from './types';
+import { DEFAULT_STYLES, DEFAULT_ORIGINAL_TEXT_CONFIG, DEFAULT_WORD_INTERACTION, DEFAULT_PAGE_WIDGET, INITIAL_ENGINES, DEFAULT_ANKI_CONFIG, DEFAULT_AUTO_TRANSLATE, INITIAL_SCENARIOS, INITIAL_DICTIONARIES } from './constants';
+import { entriesStorage, scenariosStorage, pageWidgetConfigStorage, autoTranslateConfigStorage, enginesStorage, ankiConfigStorage, seedInitialData, stylesStorage, originalTextConfigStorage, interactionConfigStorage, dictionariesStorage } from './utils/storage';
 import { preloadVoices } from './utils/audio';
 
 const App: React.FC = () => {
@@ -23,6 +24,7 @@ const App: React.FC = () => {
   const [pageWidgetConfig, setPageWidgetConfig] = useState<PageWidgetConfig>(DEFAULT_PAGE_WIDGET);
   const [autoTranslate, setAutoTranslate] = useState<AutoTranslateConfig>(DEFAULT_AUTO_TRANSLATE);
   const [engines, setEngines] = useState<TranslationEngine[]>(INITIAL_ENGINES);
+  const [dictionaries, setDictionaries] = useState<DictionaryEngine[]>(INITIAL_DICTIONARIES);
   const [ankiConfig, setAnkiConfig] = useState<AnkiConfig>(DEFAULT_ANKI_CONFIG);
   const [styles, setStyles] = useState<Record<WordCategory, StyleConfig>>(DEFAULT_STYLES);
   const [originalTextConfig, setOriginalTextConfig] = useState<OriginalTextConfig>(DEFAULT_ORIGINAL_TEXT_CONFIG);
@@ -33,12 +35,13 @@ const App: React.FC = () => {
     preloadVoices(); // Preload voices for preview
     const loadData = async () => {
       await seedInitialData();
-      const [s, e, p, a, eng, ank, sty, orig, interact] = await Promise.all([
+      const [s, e, p, a, eng, dict, ank, sty, orig, interact] = await Promise.all([
         scenariosStorage.getValue(),
         entriesStorage.getValue(),
         pageWidgetConfigStorage.getValue(),
         autoTranslateConfigStorage.getValue(),
         enginesStorage.getValue(),
+        dictionariesStorage.getValue(),
         ankiConfigStorage.getValue(),
         stylesStorage.getValue(),
         originalTextConfigStorage.getValue(),
@@ -50,6 +53,7 @@ const App: React.FC = () => {
       setPageWidgetConfig(p);
       setAutoTranslate(a);
       setEngines(eng);
+      setDictionaries(dict);
       setAnkiConfig(ank);
       setStyles(sty);
       setOriginalTextConfig(orig);
@@ -70,6 +74,7 @@ const App: React.FC = () => {
             pageWidgetConfigStorage.setValue(pageWidgetConfig),
             autoTranslateConfigStorage.setValue(autoTranslate),
             enginesStorage.setValue(engines),
+            dictionariesStorage.setValue(dictionaries),
             ankiConfigStorage.setValue(ankiConfig),
             stylesStorage.setValue(styles),
             originalTextConfigStorage.setValue(originalTextConfig),
@@ -78,7 +83,7 @@ const App: React.FC = () => {
     }, 800);
 
     return () => clearTimeout(timer);
-  }, [entries, scenarios, pageWidgetConfig, autoTranslate, engines, ankiConfig, styles, originalTextConfig, interactionConfig, isLoading]);
+  }, [entries, scenarios, pageWidgetConfig, autoTranslate, engines, dictionaries, ankiConfig, styles, originalTextConfig, interactionConfig, isLoading]);
 
   const scrollToSetting = (id: SettingSectionId) => {
     setCurrentView('settings');
@@ -154,7 +159,7 @@ const App: React.FC = () => {
                 </section>
 
                 <section id="engines" className="scroll-mt-8">
-                  <EnginesSection engines={engines} setEngines={setEngines} />
+                  <EnginesSection engines={engines} setEngines={setEngines} dictionaries={dictionaries} />
                 </section>
 
                 <section id="preview" className="scroll-mt-8">

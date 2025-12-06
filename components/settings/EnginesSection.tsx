@@ -1,7 +1,8 @@
 
+
 import React, { useState } from 'react';
-import { TranslationEngine, EngineType } from '../../types';
-import { Plus, GripVertical, RefreshCw, CheckCircle, WifiOff, Trash2, Globe, BrainCircuit, X } from 'lucide-react';
+import { TranslationEngine, EngineType, DictionaryEngine } from '../../types';
+import { Plus, GripVertical, RefreshCw, CheckCircle, WifiOff, Trash2, Globe, BrainCircuit, X, Book } from 'lucide-react';
 import { callTencentTranslation } from '../../utils/api';
 
 // Simple Tooltip component internal to section
@@ -20,9 +21,10 @@ const Tooltip: React.FC<{ text: string; children: React.ReactNode }> = ({ text, 
 interface EnginesSectionProps {
     engines: TranslationEngine[];
     setEngines: React.Dispatch<React.SetStateAction<TranslationEngine[]>>;
+    dictionaries: DictionaryEngine[];
 }
 
-export const EnginesSection: React.FC<EnginesSectionProps> = ({ engines, setEngines }) => {
+export const EnginesSection: React.FC<EnginesSectionProps> = ({ engines, setEngines, dictionaries }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newEngineType, setNewEngineType] = useState<EngineType | null>(null);
   const [newEngineData, setNewEngineData] = useState<Partial<TranslationEngine>>({});
@@ -230,6 +232,35 @@ export const EnginesSection: React.FC<EnginesSectionProps> = ({ engines, setEngi
               </div>
             </div>
           ))}
+        </div>
+        
+        {/* Dictionary Sources Section */}
+        <div className="p-6 border-t border-slate-200 bg-slate-50">
+            <h3 className="text-sm font-bold text-slate-800 mb-4 flex items-center">
+                <Book className="w-4 h-4 mr-2 text-slate-500"/>
+                词典数据源 (Dictionary Sources)
+            </h3>
+            <p className="text-xs text-slate-500 mb-4">
+                当新增单词时，系统会自动从以下免费词典 API 补充音标、例句和详细释义。默认启用且不可关闭，作为标准翻译引擎的补充。
+            </p>
+            <div className="space-y-3">
+                {dictionaries.map(dict => (
+                    <div key={dict.id} className="flex items-start gap-3 p-3 bg-white border border-slate-200 rounded-lg shadow-sm">
+                         <div className="pt-0.5">
+                            <input type="checkbox" checked={dict.isEnabled} disabled className="rounded text-blue-600 w-4 h-4 opacity-70 cursor-not-allowed" />
+                         </div>
+                         <div>
+                             <div className="flex items-center gap-2">
+                                <span className="text-sm font-bold text-slate-800">{dict.name}</span>
+                                {dict.id === 'free-dict' && <span className="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded border border-blue-100">首选 (Primary)</span>}
+                                {dict.id === 'wiktionary' && <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200">备用 (Failover)</span>}
+                             </div>
+                             <div className="text-xs text-slate-500 mt-1">{dict.description}</div>
+                             <div className="text-[10px] text-slate-400 mt-1 font-mono truncate max-w-[400px]">{dict.endpoint}</div>
+                         </div>
+                    </div>
+                ))}
+            </div>
         </div>
 
         {isModalOpen && (

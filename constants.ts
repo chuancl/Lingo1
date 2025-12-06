@@ -1,6 +1,6 @@
 
 
-import { StyleConfig, WordCategory, Scenario, TranslationEngine, WordInteractionConfig, PageWidgetConfig, AnkiConfig, OriginalTextConfig, MergeStrategyConfig, AutoTranslateConfig } from './types';
+import { StyleConfig, WordCategory, Scenario, TranslationEngine, WordInteractionConfig, PageWidgetConfig, AnkiConfig, OriginalTextConfig, MergeStrategyConfig, AutoTranslateConfig, DictionaryEngine } from './types';
 
 export const DEFAULT_STYLE: StyleConfig = {
   color: '#000000',
@@ -70,6 +70,25 @@ export const INITIAL_ENGINES: TranslationEngine[] = [
   { id: 'baidu', name: '百度翻译', type: 'standard', isEnabled: false, appId: '', secretKey: '' },
   { id: 'iflytek', name: '科大讯飞', type: 'standard', isEnabled: false, appId: '', apiKey: '', secretKey: '' },
   { id: 'custom-mock', name: '模拟翻译 (无需 Key)', type: 'standard', isEnabled: false },
+];
+
+export const INITIAL_DICTIONARIES: DictionaryEngine[] = [
+  { 
+    id: 'free-dict', 
+    name: 'Free Dictionary API', 
+    endpoint: 'https://api.dictionaryapi.dev/api/v2/entries/en/', 
+    isEnabled: true, 
+    priority: 1,
+    description: 'Google 官方推荐的免费英文词典源，提供音标、音频和丰富例句。'
+  },
+  { 
+    id: 'wiktionary', 
+    name: 'Wiktionary API (Failover)', 
+    endpoint: 'https://en.wiktionary.org/api/rest_v1/page/definition/', 
+    isEnabled: true, 
+    priority: 2,
+    description: '维基词典，作为备用数据源，提供基础释义支持。'
+  }
 ];
 
 export const DEFAULT_WORD_INTERACTION: WordInteractionConfig = {

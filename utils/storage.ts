@@ -1,7 +1,8 @@
 
+
 import { storage } from 'wxt/storage';
-import { WordEntry, WordCategory, PageWidgetConfig, AutoTranslateConfig, Scenario, TranslationEngine, AnkiConfig, StyleConfig, OriginalTextConfig, WordInteractionConfig } from '../types';
-import { DEFAULT_PAGE_WIDGET, DEFAULT_AUTO_TRANSLATE, INITIAL_SCENARIOS, INITIAL_ENGINES, DEFAULT_ANKI_CONFIG, DEFAULT_STYLES, DEFAULT_ORIGINAL_TEXT_CONFIG, DEFAULT_WORD_INTERACTION } from '../constants';
+import { WordEntry, WordCategory, PageWidgetConfig, AutoTranslateConfig, Scenario, TranslationEngine, AnkiConfig, StyleConfig, OriginalTextConfig, WordInteractionConfig, DictionaryEngine } from '../types';
+import { DEFAULT_PAGE_WIDGET, DEFAULT_AUTO_TRANSLATE, INITIAL_SCENARIOS, INITIAL_ENGINES, DEFAULT_ANKI_CONFIG, DEFAULT_STYLES, DEFAULT_ORIGINAL_TEXT_CONFIG, DEFAULT_WORD_INTERACTION, INITIAL_DICTIONARIES } from '../constants';
 
 // Define storage keys and default values
 export const entriesStorage = storage.defineItem<WordEntry[]>('local:entries', {
@@ -30,6 +31,10 @@ export const autoTranslateConfigStorage = storage.defineItem<AutoTranslateConfig
 
 export const enginesStorage = storage.defineItem<TranslationEngine[]>('local:engines', {
   defaultValue: INITIAL_ENGINES,
+});
+
+export const dictionariesStorage = storage.defineItem<DictionaryEngine[]>('local:dictionaries', {
+  defaultValue: INITIAL_DICTIONARIES,
 });
 
 export const ankiConfigStorage = storage.defineItem<AnkiConfig>('local:ankiConfig', {

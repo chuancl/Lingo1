@@ -98,6 +98,15 @@ export interface TranslationEngine {
   isCustom?: boolean;
 }
 
+export interface DictionaryEngine {
+  id: string;
+  name: string;
+  endpoint: string;
+  isEnabled: boolean; // Always true in UI
+  priority: number;
+  description?: string;
+}
+
 export interface AnkiTemplateConfig {
   frontTemplate: string;
   backTemplate: string;
