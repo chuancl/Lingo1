@@ -1,8 +1,4 @@
 
-
-
-
-
 import React, { useEffect, useState, useRef } from 'react';
 import { WordEntry, WordInteractionConfig, WordCategory } from '../types';
 import { Volume2, Plus, Check } from 'lucide-react';
@@ -43,6 +39,11 @@ export const WordBubble: React.FC<WordBubbleProps> = ({
     }
   }, [entry]);
 
+  // Fix: Reset auto-play flag whenever the entry ID changes (Handling "Hot Swap" between words)
+  useEffect(() => {
+      hasAutoPlayedRef.current = false;
+  }, [entry?.id]);
+
   // Stop audio immediately if bubble becomes invisible
   useEffect(() => {
     if (!isVisible) {
@@ -53,6 +54,7 @@ export const WordBubble: React.FC<WordBubbleProps> = ({
 
   // Handle Auto Pronounce
   useEffect(() => {
+      // Check if visible, has entry, config allows, AND we haven't played THIS specific entry yet.
       if (isVisible && entry && config.autoPronounceCount > 0 && !hasAutoPlayedRef.current) {
           playTextToSpeech(entry.text, config.autoPronounceAccent, ttsSpeed, config.autoPronounceCount);
           hasAutoPlayedRef.current = true;
