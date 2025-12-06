@@ -1,0 +1,29 @@
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 隐藏滚动条但保留滚动功能 */
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* 扩展自定义样式，用于 Content Script 注入的内容 */
+.context-lingo-word {
+  /* 保留用于简单选择 */
+  position: relative;
+  /* Ruby layout requires inline flow to align baselines correctly */
+  display: inline; 
+  border-radius: 4px;
+}
+
+.context-lingo-wrapper {
+   /* Reset generic styles to avoid page pollution */
+   font-variant: normal;
+   text-transform: none;
+   letter-spacing: normal;
+}
