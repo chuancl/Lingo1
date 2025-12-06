@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { WordCategory, WordEntry, MergeStrategyConfig, WordTab, Scenario } from '../types';
 import { DEFAULT_MERGE_STRATEGY } from '../constants';
-import { Upload, Download, Filter, Settings2, List, Search, Plus, Trash2, CheckSquare, Square } from 'lucide-react';
+import { Upload, Download, Filter, Settings2, List, Search, Plus, Trash2, CheckSquare, Square, ArrowRight, BookOpen, GraduationCap, CheckCircle, RotateCcw } from 'lucide-react';
 import { MergeConfigModal } from './word-manager/MergeConfigModal';
 import { AddWordModal } from './word-manager/AddWordModal';
 import { WordList } from './word-manager/WordList';
@@ -55,18 +55,35 @@ export const WordManager: React.FC<WordManagerProps> = ({ scenarios, entries, se
     }
   }, [scenarios, selectedScenarioId]);
 
+  // Helper: Check if word exists in Known (Text + Translation must match strictly for the "Same Word" concept)
+  const existsInKnown = (text: string, translation: string) => {
+      return entries.some(e => 
+          e.category === WordCategory.KnownWord && 
+          e.text.toLowerCase().trim() === text.toLowerCase().trim() &&
+          e.translation?.trim() === translation.trim()
+      );
+  };
+
   const filteredEntries = useMemo(() => {
     return entries.filter(e => {
+      // 1. Tab Filtering Logic
       if (activeTab !== 'all') {
         if (activeTab === WordCategory.WantToLearnWord) {
+           // Rule: "Learning is a subset of WantToLearn". 
+           // So if tab is WantToLearn, show both WantToLearn AND Learning.
            if (e.category !== WordCategory.WantToLearnWord && e.category !== WordCategory.LearningWord) return false;
         } else {
+           // For Known and Learning tabs, show strictly their category
            if (e.category !== activeTab) return false;
         }
       }
+
+      // 2. Scenario Filtering
       if (selectedScenarioId !== 'all') {
          if (e.scenarioId !== selectedScenarioId) return false;
       }
+
+      // 3. Search Filtering
       if (searchQuery) {
         const lowerQ = searchQuery.toLowerCase();
         const matchText = e.text.toLowerCase().includes(lowerQ);
@@ -142,6 +159,19 @@ export const WordManager: React.FC<WordManagerProps> = ({ scenarios, entries, se
     }
   };
 
+  const handleBatchMove = (targetCategory: WordCategory) => {
+      if (selectedWords.size === 0) return;
+      
+      const newEntries = entries.map(e => {
+          if (selectedWords.has(e.id)) {
+              return { ...e, category: targetCategory };
+          }
+          return e;
+      });
+      setEntries(newEntries);
+      setSelectedWords(new Set()); // Clear selection after move
+  };
+
   const handleExport = () => {
      const dataToExport = filteredEntries;
      const blob = new Blob([JSON.stringify(dataToExport, null, 2)], { type: 'application/json' });
@@ -166,31 +196,52 @@ export const WordManager: React.FC<WordManagerProps> = ({ scenarios, entries, se
      const reader = new FileReader();
      reader.onload = (event) => {
         const text = event.target?.result as string;
+        let candidates: Partial<WordEntry>[] = [];
+        
         try {
            const json = JSON.parse(text);
            if (Array.isArray(json)) {
-              const newEntries = json.map((item: any, idx: number) => ({
-                 ...item,
-                 id: `import-${Date.now()}-${idx}`,
-                 category: activeTab === 'all' ? WordCategory.WantToLearnWord : activeTab
-              }));
-              setEntries(prev => [...prev, ...newEntries]);
-              alert(`成功导入 ${newEntries.length} 个单词`);
+               candidates = json;
            }
         } catch (err) {
            const lines = text.split('\n').filter(l => l.trim());
-           const newEntries = lines.map((line, idx) => ({
-              id: `import-txt-${Date.now()}-${idx}`,
+           candidates = lines.map((line) => ({
               text: line.trim(),
-              translation: '待获取...',
-              category: activeTab === 'all' ? WordCategory.WantToLearnWord : activeTab,
-              addedAt: Date.now(),
-              scenarioId: selectedScenarioId === 'all' ? '1' : selectedScenarioId,
-              phoneticUs: '',
-              contextSentence: 'Imported via text file.'
+              translation: '',
            }));
-           setEntries(prev => [...prev, ...newEntries]);
-           alert(`成功导入 ${newEntries.length} 个单词 (文本模式)`);
+        }
+
+        // Filter out words that are already in 'KnownWord'
+        const validEntries: WordEntry[] = [];
+        let duplicateCount = 0;
+
+        candidates.forEach((c, idx) => {
+            if (c.text) {
+                 if (existsInKnown(c.text, c.translation || '')) {
+                     duplicateCount++;
+                     return;
+                 }
+                 
+                 validEntries.push({
+                    id: c.id || `import-${Date.now()}-${idx}`,
+                    text: c.text,
+                    translation: c.translation || '待获取...',
+                    category: activeTab === 'all' ? WordCategory.WantToLearnWord : activeTab,
+                    addedAt: c.addedAt || Date.now(),
+                    scenarioId: c.scenarioId || (selectedScenarioId === 'all' ? '1' : selectedScenarioId),
+                    phoneticUs: c.phoneticUs || '',
+                    contextSentence: c.contextSentence || 'Imported word.'
+                 } as WordEntry);
+            }
+        });
+
+        if (validEntries.length > 0) {
+            setEntries(prev => [...prev, ...validEntries]);
+            alert(`成功导入 ${validEntries.length} 个单词。${duplicateCount > 0 ? `\n有 ${duplicateCount} 个单词因已在“已掌握”列表中而被跳过。` : ''}`);
+        } else if (duplicateCount > 0) {
+            alert(`所有导入的单词均已存在于“已掌握”列表中。`);
+        } else {
+            alert('未能解析有效单词。');
         }
      };
      reader.readAsText(file);
@@ -199,6 +250,13 @@ export const WordManager: React.FC<WordManagerProps> = ({ scenarios, entries, se
 
   const handleAddWord = (text: string, translation: string) => {
      if (!text) return;
+
+     // Strict Check: Cannot add to Want/Learning if exists in Known
+     if (existsInKnown(text, translation)) {
+         alert('该单词（及释义）已存在于“已掌握”列表中，无法重复添加为新词。');
+         return;
+     }
+
      const entry: WordEntry = {
         id: `manual-${Date.now()}`,
         text: text,
@@ -269,6 +327,7 @@ export const WordManager: React.FC<WordManagerProps> = ({ scenarios, entries, se
       />
 
       <div className="border-b border-slate-200 bg-white p-4 space-y-4">
+        {/* Tab Selection */}
         <div className="flex overflow-x-auto gap-2 pb-2 hide-scrollbar">
           {(['all', ...Object.values(WordCategory)] as WordTab[]).map((tab) => (
             <button
@@ -286,10 +345,11 @@ export const WordManager: React.FC<WordManagerProps> = ({ scenarios, entries, se
           ))}
         </div>
         
+        {/* Toolbar */}
         <div className="flex flex-wrap gap-4 items-center justify-between bg-slate-50/50 p-3 rounded-xl border border-slate-100">
            <div className="flex items-center gap-4 flex-1">
               <div className="flex items-center">
-                 <button onClick={toggleSelectAll} className="flex items-center text-sm font-medium text-slate-600 hover:text-slate-900">
+                 <button onClick={toggleSelectAll} className="flex items-center text-sm font-medium text-slate-600 hover:text-slate-900 select-none">
                     {allSelected ? <CheckSquare className="w-5 h-5 mr-2 text-blue-600"/> : <Square className="w-5 h-5 mr-2 text-slate-400"/>}
                     全选
                  </button>
@@ -321,44 +381,87 @@ export const WordManager: React.FC<WordManagerProps> = ({ scenarios, entries, se
               </div>
            </div>
 
-           <div className="flex gap-2">
-              {!isAllWordsTab && (
-                <>
-                  <Tooltip text={`手动添加单词至"${getTabLabel(activeTab)}"`}>
-                      <button 
-                        onClick={() => setIsAddModalOpen(true)}
-                        className="flex items-center px-3 py-1.5 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition"
-                      >
-                        <Plus className="w-4 h-4 mr-2" /> 新增
-                      </button>
-                  </Tooltip>
+           <div className="flex gap-2 items-center">
+              {selectedWords.size > 0 ? (
+                 <>
+                    {/* Batch Actions based on Category */}
+                    
+                    {/* Known Tab Actions */}
+                    {activeTab === WordCategory.KnownWord && (
+                        <>
+                           <button onClick={() => handleBatchMove(WordCategory.WantToLearnWord)} className="flex items-center px-3 py-1.5 text-sm font-medium text-amber-700 bg-amber-50 border border-amber-100 rounded-lg hover:bg-amber-100 transition animate-in slide-in-from-right-2">
+                              <RotateCcw className="w-4 h-4 mr-2" /> 移至想学
+                           </button>
+                           <button onClick={() => handleBatchMove(WordCategory.LearningWord)} className="flex items-center px-3 py-1.5 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-100 rounded-lg hover:bg-blue-100 transition animate-in slide-in-from-right-2">
+                              <BookOpen className="w-4 h-4 mr-2" /> 移至正在学
+                           </button>
+                        </>
+                    )}
 
-                  <Tooltip text={`导入 TXT/JSON 文件至"${getTabLabel(activeTab)}"`}>
-                    <button 
-                        onClick={triggerImport}
-                        className="flex items-center px-3 py-1.5 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition"
-                    >
-                      <Upload className="w-4 h-4 mr-2" /> 导入
+                    {/* Want To Learn Tab Actions */}
+                    {activeTab === WordCategory.WantToLearnWord && (
+                        <>
+                            <button onClick={() => handleBatchMove(WordCategory.LearningWord)} className="flex items-center px-3 py-1.5 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-100 rounded-lg hover:bg-blue-100 transition animate-in slide-in-from-right-2">
+                               <ArrowRight className="w-4 h-4 mr-2" /> 开始学习
+                            </button>
+                            <button onClick={() => handleBatchMove(WordCategory.KnownWord)} className="flex items-center px-3 py-1.5 text-sm font-medium text-green-700 bg-green-50 border border-green-100 rounded-lg hover:bg-green-100 transition animate-in slide-in-from-right-2">
+                               <CheckCircle className="w-4 h-4 mr-2" /> 设为已掌握
+                            </button>
+                        </>
+                    )}
+
+                    {/* Learning Tab Actions */}
+                    {activeTab === WordCategory.LearningWord && (
+                         <>
+                            <button onClick={() => handleBatchMove(WordCategory.WantToLearnWord)} className="flex items-center px-3 py-1.5 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition animate-in slide-in-from-right-2">
+                               <RotateCcw className="w-4 h-4 mr-2" /> 移回想学
+                            </button>
+                            <button onClick={() => handleBatchMove(WordCategory.KnownWord)} className="flex items-center px-3 py-1.5 text-sm font-medium text-green-700 bg-green-50 border border-green-100 rounded-lg hover:bg-green-100 transition animate-in slide-in-from-right-2">
+                               <GraduationCap className="w-4 h-4 mr-2" /> 设为已掌握
+                            </button>
+                         </>
+                    )}
+                    
+                    <div className="w-px h-6 bg-slate-300 mx-2"></div>
+                    
+                    <button onClick={handleDeleteSelected} className="flex items-center px-3 py-1.5 text-sm text-red-600 bg-red-50 hover:bg-red-100 border border-red-100 rounded-lg transition animate-in slide-in-from-right-2">
+                        <Trash2 className="w-4 h-4 mr-2" /> 删除 ({selectedWords.size})
                     </button>
-                  </Tooltip>
-                </>
-              )}
+                 </>
+              ) : (
+                  /* Standard Add/Import/Export Buttons */
+                  <>
+                    {!isAllWordsTab && activeTab !== WordCategory.KnownWord && (
+                        <>
+                        <Tooltip text={`手动添加单词至"${getTabLabel(activeTab)}"`}>
+                            <button 
+                                onClick={() => setIsAddModalOpen(true)}
+                                className="flex items-center px-3 py-1.5 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition"
+                            >
+                                <Plus className="w-4 h-4 mr-2" /> 新增
+                            </button>
+                        </Tooltip>
 
-              <Tooltip text="导出当前列表">
-                <button 
-                    onClick={handleExport}
-                    className="flex items-center px-3 py-1.5 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition"
-                >
-                  <Download className="w-4 h-4 mr-2" /> 导出
-                </button>
-              </Tooltip>
-              
-              {selectedWords.size > 0 && (
-                <Tooltip text="删除选中的单词。">
-                  <button onClick={handleDeleteSelected} className="flex items-center px-3 py-1.5 text-sm text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition ml-2 animate-in slide-in-from-right-2">
-                    <Trash2 className="w-4 h-4 mr-2" /> 删除 ({selectedWords.size})
-                  </button>
-                </Tooltip>
+                        <Tooltip text={`导入 TXT/JSON 文件至"${getTabLabel(activeTab)}"`}>
+                            <button 
+                                onClick={triggerImport}
+                                className="flex items-center px-3 py-1.5 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition"
+                            >
+                            <Upload className="w-4 h-4 mr-2" /> 导入
+                            </button>
+                        </Tooltip>
+                        </>
+                    )}
+
+                    <Tooltip text="导出当前列表">
+                        <button 
+                            onClick={handleExport}
+                            className="flex items-center px-3 py-1.5 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition"
+                        >
+                        <Download className="w-4 h-4 mr-2" /> 导出
+                        </button>
+                    </Tooltip>
+                  </>
               )}
            </div>
         </div>

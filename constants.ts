@@ -1,4 +1,5 @@
 
+
 import { StyleConfig, WordCategory, Scenario, TranslationEngine, WordInteractionConfig, PageWidgetConfig, AnkiConfig, OriginalTextConfig, MergeStrategyConfig, AutoTranslateConfig } from './types';
 
 export const DEFAULT_STYLE: StyleConfig = {
@@ -74,6 +75,7 @@ export const INITIAL_ENGINES: TranslationEngine[] = [
 export const DEFAULT_WORD_INTERACTION: WordInteractionConfig = {
   mainTrigger: { modifier: 'None', action: 'Hover', delay: 600 },
   quickAddTrigger: { modifier: 'Alt', action: 'DoubleClick', delay: 0 },
+  bubblePosition: 'top',
   showPhonetic: true,
   showOriginalText: true,
   showDictExample: true,

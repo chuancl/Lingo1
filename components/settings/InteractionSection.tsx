@@ -1,7 +1,8 @@
 
+
 import React from 'react';
-import { WordInteractionConfig, InteractionTrigger, ModifierKey, MouseAction } from '../../types';
-import { Volume2, Info } from 'lucide-react';
+import { WordInteractionConfig, InteractionTrigger, ModifierKey, MouseAction, BubblePosition } from '../../types';
+import { Volume2, Info, ArrowUp, ArrowDown, ArrowLeft, ArrowRight } from 'lucide-react';
 
 const Tooltip: React.FC<{ text: string; children: React.ReactNode }> = ({ text, children }) => {
   return (
@@ -103,6 +104,25 @@ export const InteractionSection: React.FC<InteractionSectionProps> = ({ config, 
                     onChange={(val) => setConfig({...config, mainTrigger: val})}
                 />
 
+                <div className="bg-slate-50 p-4 rounded-lg border border-slate-100">
+                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 block">气泡位置</label>
+                    <div className="flex gap-2">
+                        {(['top', 'bottom', 'left', 'right'] as BubblePosition[]).map(pos => (
+                             <button
+                                key={pos}
+                                onClick={() => setConfig({...config, bubblePosition: pos})}
+                                className={`flex-1 py-2 rounded-lg border flex flex-col items-center justify-center transition-all ${config.bubblePosition === pos ? 'bg-blue-50 border-blue-200 text-blue-600 font-bold' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'}`}
+                             >
+                                 {pos === 'top' && <ArrowUp className="w-4 h-4 mb-1"/>}
+                                 {pos === 'bottom' && <ArrowDown className="w-4 h-4 mb-1"/>}
+                                 {pos === 'left' && <ArrowLeft className="w-4 h-4 mb-1"/>}
+                                 {pos === 'right' && <ArrowRight className="w-4 h-4 mb-1"/>}
+                                 <span className="text-xs capitalize">{pos}</span>
+                             </button>
+                        ))}
+                    </div>
+                </div>
+
                 <TriggerInput 
                     label="快速添加 (至正在学)" 
                     value={config.quickAddTrigger} 
@@ -146,33 +166,31 @@ export const InteractionSection: React.FC<InteractionSectionProps> = ({ config, 
                     <span className="text-xl font-serif text-slate-800 cursor-pointer border-b-2 border-red-200">ephemeral</span>
                     
                     {/* The Bubble */}
-                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 w-64 bg-white rounded-lg shadow-xl border border-slate-200 p-4 z-10">
-                       <div className="flex justify-between items-start mb-2">
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 w-64 bg-white rounded-lg shadow-xl border border-slate-200 p-5 z-10">
+                       <div className="flex justify-between items-start mb-3">
                           <div>
-                             <h4 className="font-bold text-lg text-slate-900">ephemeral</h4>
-                             {config.showPhonetic && <span className="text-xs text-slate-500 font-mono">/əˈfem(ə)rəl/</span>}
+                             <h4 className="font-bold text-xl text-slate-900 leading-tight mb-1">ephemeral</h4>
+                             {config.showPhonetic && <span className="text-xs text-slate-400 font-mono block">/əˈfem(ə)rəl/</span>}
                           </div>
-                          <button className="text-slate-400 hover:text-blue-600"><Volume2 className="w-4 h-4"/></button>
+                          <button className="text-slate-400 hover:text-blue-600 p-1 rounded-full"><Volume2 className="w-4 h-4"/></button>
                        </div>
                        
                        {config.showDictTranslation && (
-                          <div className="text-sm text-slate-700 font-medium mb-2">adj. 短暂的；朝生暮死的</div>
+                          <div className="text-sm text-slate-700 font-medium mb-3 leading-snug">adj. 短暂的；朝生暮死的</div>
                        )}
 
                        {config.showOriginalText && (
-                          <div className="text-xs text-slate-500 bg-slate-50 px-2 py-1 rounded mb-2 border border-slate-100">
-                             原文: <span className="text-slate-700">短暂的</span>
+                          <div className="flex items-center text-xs text-slate-500 bg-slate-50 px-3 py-1.5 rounded-md mb-3 border border-slate-100">
+                             <span className="mr-2 text-slate-400">原文:</span>
+                             <span className="text-slate-700 font-medium">短暂的</span>
                           </div>
                        )}
 
                        {config.showDictExample && (
-                          <div className="text-xs text-slate-600 italic border-l-2 border-blue-400 pl-2">
+                          <div className="text-xs text-slate-600 italic border-l-2 border-blue-400 pl-3 py-0.5 leading-relaxed">
                              Her success was ephemeral.
                           </div>
                        )}
-
-                       {/* Arrow */}
-                       <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px w-3 h-3 bg-white border-b border-r border-slate-200 transform rotate-45"></div>
                     </div>
                  </div>
               </div>

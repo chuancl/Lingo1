@@ -124,10 +124,14 @@ export interface InteractionTrigger {
   delay: number; // ms
 }
 
+export type BubblePosition = 'top' | 'bottom' | 'left' | 'right';
+
 export interface WordInteractionConfig {
   mainTrigger: InteractionTrigger;
   quickAddTrigger: InteractionTrigger;
   
+  bubblePosition: BubblePosition; // New field
+
   showPhonetic: boolean;
   showOriginalText: boolean; 
   showDictExample: boolean;
@@ -147,47 +151,29 @@ export interface PopupCardItem {
 }
 
 export interface PageWidgetConfig {
-  enabled: boolean; // Master switch
-  x: number;
+  enabled: boolean;
+  // Set to 0 to indicate uninitialized position, triggering auto-position logic in component
+  x: number; 
   y: number;
-  width: number; // px
-  maxHeight: number; // px
+  width: number;
+  maxHeight: number;
   opacity: number;
   backgroundColor: string;
   fontSize: string;
   
-  // Modal State
-  modalPosition: { x: number; y: number };
-  modalSize: { width: number; height: number };
+  modalPosition: { x: number, y: number };
+  modalSize: { width: number, height: number };
 
-  // Fixed Content Toggles
   showPhonetic: boolean;
   showMeaning: boolean;
-  showMultiExamples: boolean; // Toggle for showing all examples vs just latest
+  showMultiExamples: boolean;
 
-  // Content filter
   showSections: {
     known: boolean;
     want: boolean;
     learning: boolean;
   };
-  // Sortable Card Body
   cardDisplay: PopupCardItem[];
-}
-
-export type MergeStrategy = 'by_word' | 'by_word_and_meaning';
-export type ExampleSourceType = 'context' | 'mixed' | 'dictionary';
-
-export interface ExampleSortItem {
-  id: ExampleSourceType;
-  label: string;
-  enabled: boolean;
-}
-
-export interface MergeStrategyConfig {
-  strategy: MergeStrategy;
-  showMultiExamples: boolean; 
-  exampleOrder: ExampleSortItem[];
 }
 
 export interface AutoTranslateConfig {
@@ -196,19 +182,11 @@ export interface AutoTranslateConfig {
   whitelist: string[];
 }
 
+export interface MergeStrategyConfig {
+  strategy: 'by_word' | 'by_word_and_meaning';
+  showMultiExamples: boolean;
+  exampleOrder: { id: string, label: string, enabled: boolean }[];
+}
+
 export type AppView = 'dashboard' | 'words' | 'settings';
 export type SettingSectionId = 'general' | 'visual-styles' | 'scenarios' | 'word-bubble' | 'page-widget' | 'engines' | 'anki';
-
-// App Config Wrapper for Export
-export interface AppConfiguration {
-  version: string;
-  timestamp: string;
-  autoTranslate: AutoTranslateConfig;
-  scenarios: Scenario[];
-  styles: Record<WordCategory, StyleConfig>;
-  originalText: OriginalTextConfig;
-  interaction: WordInteractionConfig;
-  pageWidget: PageWidgetConfig;
-  engines: TranslationEngine[];
-  anki: AnkiConfig;
-}

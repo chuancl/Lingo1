@@ -1,11 +1,11 @@
 
 import ReactDOM from 'react-dom/client';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { PageWidget } from '../../components/PageWidget';
 import { WordBubble } from '../../components/WordBubble';
 import '../../index.css'; 
 import { entriesStorage, pageWidgetConfigStorage, autoTranslateConfigStorage, stylesStorage, originalTextConfigStorage, enginesStorage, interactionConfigStorage } from '../../utils/storage';
-import { WordEntry, PageWidgetConfig, WordInteractionConfig } from '../../types';
+import { WordEntry, PageWidgetConfig, WordInteractionConfig, WordCategory } from '../../types';
 import { defineContentScript } from 'wxt/sandbox';
 import { createShadowRootUi } from 'wxt/client';
 import { findFuzzyMatches } from '../../utils/matching';
@@ -29,9 +29,12 @@ const ContentOverlay: React.FC<ContentOverlayProps> = ({ initialWidgetConfig, in
 
   // Bubble Logic
   const [hoveredEntry, setHoveredEntry] = useState<WordEntry | null>(null);
+  const [hoveredOriginalText, setHoveredOriginalText] = useState<string>("");
   const [hoverTargetRect, setHoverTargetRect] = useState<DOMRect | null>(null);
   const [isBubbleVisible, setIsBubbleVisible] = useState(false);
-  const hoverTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  
+  const showTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     // Sync Storage Listeners
@@ -41,10 +44,6 @@ const ContentOverlay: React.FC<ContentOverlayProps> = ({ initialWidgetConfig, in
         entriesStorage.watch(v => v && setEntries(v))
     ];
 
-    // Recalculate page words for widget badge whenever entries change
-    // Note: This is a simplified check. Real implementation might need to know which words actually rendered.
-    // For now we assume if it's in the entries list and common, it might be on page.
-    // Better logic is to update this list when translation scheduler finishes.
     const pageContent = document.body.innerText;
     const relevant = entries.filter(e => pageContent.includes(e.translation || ''));
     setPageWords(relevant);
@@ -56,19 +55,33 @@ const ContentOverlay: React.FC<ContentOverlayProps> = ({ initialWidgetConfig, in
   useEffect(() => {
      const handleMouseOver = (e: MouseEvent) => {
          const target = e.target as HTMLElement;
-         // Look for the specific target class or wrapper
          const entryEl = target.closest('[data-entry-id]') as HTMLElement;
          
          if (entryEl) {
              const id = entryEl.getAttribute('data-entry-id');
+             const originalText = entryEl.getAttribute('data-original-text') || '';
              const entry = entries.find(w => w.id === id);
+             
              if (entry) {
-                 if (hoverTimer.current) clearTimeout(hoverTimer.current);
+                 // Cancel any pending hide action (e.g. moving from bubble back to word)
+                 if (hideTimer.current) {
+                     clearTimeout(hideTimer.current);
+                     hideTimer.current = null;
+                 }
                  
+                 // If already visible and same entry, just update rect (in case of movement) but don't re-trigger show
+                 if (isBubbleVisible && hoveredEntry?.id === entry.id) {
+                     return;
+                 }
+
                  const delay = interactionConfig.mainTrigger.action === 'Hover' ? interactionConfig.mainTrigger.delay : 0;
                  
-                 hoverTimer.current = setTimeout(() => {
+                 // If we have a pending show timer for another word, clear it
+                 if (showTimer.current) clearTimeout(showTimer.current);
+
+                 showTimer.current = setTimeout(() => {
                     setHoveredEntry(entry);
+                    setHoveredOriginalText(originalText);
                     setHoverTargetRect(entryEl.getBoundingClientRect());
                     setIsBubbleVisible(true);
                  }, delay);
@@ -81,15 +94,18 @@ const ContentOverlay: React.FC<ContentOverlayProps> = ({ initialWidgetConfig, in
         const entryEl = target.closest('[data-entry-id]');
         
         if (entryEl) {
-            if (hoverTimer.current) clearTimeout(hoverTimer.current);
-            // Add a small delay before hiding to allow moving mouse to bubble (if bubble was interactive)
-            // But since our bubble is pointer-events-none by default (except button), we hide immediately
-            // unless we want to allow interacting with the bubble.
-            // Let's hide after small delay.
-            hoverTimer.current = setTimeout(() => {
+            // Cancel pending show
+            if (showTimer.current) {
+                clearTimeout(showTimer.current);
+                showTimer.current = null;
+            }
+
+            // Start hiding sequence
+            if (hideTimer.current) clearTimeout(hideTimer.current);
+            hideTimer.current = setTimeout(() => {
                 setIsBubbleVisible(false);
                 setHoveredEntry(null);
-            }, 200);
+            }, 300); // 300ms grace period to move mouse to bubble
         }
      };
 
@@ -100,7 +116,32 @@ const ContentOverlay: React.FC<ContentOverlayProps> = ({ initialWidgetConfig, in
          document.removeEventListener('mouseover', handleMouseOver);
          document.removeEventListener('mouseout', handleMouseOut);
      };
-  }, [entries, interactionConfig]);
+  }, [entries, interactionConfig, isBubbleVisible, hoveredEntry]);
+
+  // Handle Bubble Interaction (Keep Alive)
+  const handleBubbleMouseEnter = () => {
+      if (hideTimer.current) {
+          clearTimeout(hideTimer.current);
+          hideTimer.current = null;
+      }
+  };
+
+  const handleBubbleMouseLeave = () => {
+      if (hideTimer.current) clearTimeout(hideTimer.current);
+      hideTimer.current = setTimeout(() => {
+          setIsBubbleVisible(false);
+          setHoveredEntry(null);
+      }, 300);
+  };
+
+  const handleAddWordToLearning = async (id: string) => {
+      const allEntries = await entriesStorage.getValue();
+      const newEntries = allEntries.map(e => 
+          e.id === id ? { ...e, category: WordCategory.LearningWord } : e
+      );
+      await entriesStorage.setValue(newEntries);
+      setEntries(newEntries);
+  };
 
   return (
     <div className="reset-shadow-dom text-slate-900 font-sans text-base leading-normal">
@@ -115,9 +156,13 @@ const ContentOverlay: React.FC<ContentOverlayProps> = ({ initialWidgetConfig, in
        {/* 2. Word Interaction Bubble */}
        <WordBubble 
           entry={hoveredEntry}
+          originalText={hoveredOriginalText}
           targetRect={hoverTargetRect}
           config={interactionConfig}
           isVisible={isBubbleVisible}
+          onMouseEnter={handleBubbleMouseEnter}
+          onMouseLeave={handleBubbleMouseLeave}
+          onAddWord={handleAddWordToLearning}
        />
     </div>
   );
