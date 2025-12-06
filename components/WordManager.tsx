@@ -64,6 +64,15 @@ export const WordManager: React.FC<WordManagerProps> = ({ scenarios, entries, se
       );
   };
 
+  // Helper: Check if word exists in WantToLearn or Learning
+  const findInLearningOrWant = (text: string, translation: string) => {
+      return entries.find(e => 
+          (e.category === WordCategory.WantToLearnWord || e.category === WordCategory.LearningWord) && 
+          e.text.toLowerCase().trim() === text.toLowerCase().trim() &&
+          e.translation?.trim() === translation.trim()
+      );
+  };
+
   const filteredEntries = useMemo(() => {
     return entries.filter(e => {
       // 1. Tab Filtering Logic
@@ -211,22 +220,47 @@ export const WordManager: React.FC<WordManagerProps> = ({ scenarios, entries, se
            }));
         }
 
-        // Filter out words that are already in 'KnownWord'
+        const targetCategory = activeTab === 'all' ? WordCategory.WantToLearnWord : activeTab;
         const validEntries: WordEntry[] = [];
-        let duplicateCount = 0;
+        let duplicateCount = 0; // Already in strict category
+        let conflictCount = 0; // Exists in mutually exclusive set
 
         candidates.forEach((c, idx) => {
             if (c.text) {
-                 if (existsInKnown(c.text, c.translation || '')) {
+                 const text = c.text;
+                 const trans = c.translation || '';
+
+                 // 1. Same category duplicate check
+                 const existsInTarget = entries.some(e => 
+                    e.category === targetCategory && 
+                    e.text.toLowerCase().trim() === text.toLowerCase().trim() &&
+                    e.translation?.trim() === trans.trim()
+                 );
+
+                 if (existsInTarget) {
                      duplicateCount++;
                      return;
+                 }
+
+                 // 2. Cross-category exclusivity check
+                 if (targetCategory === WordCategory.WantToLearnWord || targetCategory === WordCategory.LearningWord) {
+                     if (existsInKnown(text, trans)) {
+                         conflictCount++;
+                         return;
+                     }
+                 } else if (targetCategory === WordCategory.KnownWord) {
+                     const existing = findInLearningOrWant(text, trans);
+                     if (existing) {
+                         conflictCount++;
+                         return;
+                     }
                  }
                  
                  validEntries.push({
                     id: c.id || `import-${Date.now()}-${idx}`,
-                    text: c.text,
+                    text: text,
                     translation: c.translation || '待获取...',
-                    category: activeTab === 'all' ? WordCategory.WantToLearnWord : activeTab,
+                    category: targetCategory,
                     addedAt: c.addedAt || Date.now(),
                     scenarioId: c.scenarioId || (selectedScenarioId === 'all' ? '1' : selectedScenarioId),
                     phoneticUs: c.phoneticUs || '',
@@ -237,11 +271,16 @@ export const WordManager: React.FC<WordManagerProps> = ({ scenarios, entries, se
 
         if (validEntries.length > 0) {
             setEntries(prev => [...prev, ...validEntries]);
-            alert(`成功导入 ${validEntries.length} 个单词。${duplicateCount > 0 ? `\n有 ${duplicateCount} 个单词因已在“已掌握”列表中而被跳过。` : ''}`);
-        } else if (duplicateCount > 0) {
-            alert(`所有导入的单词均已存在于“已掌握”列表中。`);
+            let msg = `成功导入 ${validEntries.length} 个单词。`;
+            if (duplicateCount > 0) msg += `\n有 ${duplicateCount} 个单词因已在当前列表中而跳过。`;
+            if (conflictCount > 0) msg += `\n有 ${conflictCount} 个单词因与互斥列表冲突（如已掌握 vs 正在学）而跳过。`;
+            alert(msg);
         } else {
-            alert('未能解析有效单词。');
+            if (conflictCount > 0 || duplicateCount > 0) {
+                alert(`没有导入任何新词。\n${duplicateCount} 个重复，${conflictCount} 个冲突。`);
+            } else {
+                alert('未能解析有效单词或文件为空。');
+            }
         }
      };
      reader.readAsText(file);
@@ -251,17 +290,31 @@ export const WordManager: React.FC<WordManagerProps> = ({ scenarios, entries, se
   const handleAddWord = (text: string, translation: string) => {
      if (!text) return;
 
-     // Strict Check: Cannot add to Want/Learning if exists in Known
-     if (existsInKnown(text, translation)) {
-         alert('该单词（及释义）已存在于“已掌握”列表中，无法重复添加为新词。');
-         return;
+     const targetCategory = activeTab === 'all' ? WordCategory.WantToLearnWord : activeTab;
+
+     // 1. Logic for adding to Want/Learning -> Check Known
+     if (targetCategory === WordCategory.WantToLearnWord || targetCategory === WordCategory.LearningWord) {
+         if (existsInKnown(text, translation)) {
+             alert('该单词（及释义）已存在于“已掌握”列表中，无法重复添加为新词。');
+             return;
+         }
+     }
+     
+     // 2. Logic for adding to Known -> Check Want/Learning
+     if (targetCategory === WordCategory.KnownWord) {
+         const existing = findInLearningOrWant(text, translation);
+         if (existing) {
+             const categoryName = existing.category === WordCategory.WantToLearnWord ? '想学习' : '正在学';
+             alert(`该单词已在“${categoryName}”列表中。\n\n请前往该列表将其“移至已掌握”，而不是重复新建。\n(或者，请先从${categoryName}列表中删除该词)`);
+             return;
+         }
      }
 
      const entry: WordEntry = {
         id: `manual-${Date.now()}`,
         text: text,
         translation: translation || '自定义释义',
-        category: activeTab === 'all' ? WordCategory.WantToLearnWord : activeTab,
+        category: targetCategory,
         addedAt: Date.now(),
         scenarioId: selectedScenarioId === 'all' ? '1' : selectedScenarioId,
         contextSentence: 'Manually added word.',
@@ -429,9 +482,9 @@ export const WordManager: React.FC<WordManagerProps> = ({ scenarios, entries, se
                     </button>
                  </>
               ) : (
-                  /* Standard Add/Import/Export Buttons */
+                  /* Standard Add/Import/Export Buttons - Available for ALL tabs including Known */
                   <>
-                    {!isAllWordsTab && activeTab !== WordCategory.KnownWord && (
+                    {!isAllWordsTab && (
                         <>
                         <Tooltip text={`手动添加单词至"${getTabLabel(activeTab)}"`}>
                             <button 
