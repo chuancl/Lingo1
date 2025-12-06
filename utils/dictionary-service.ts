@@ -67,6 +67,10 @@ export const fetchWordDetails = async (
     preferredTranslation: preferredTranslation
   });
 
+  if (!response) {
+    throw new Error("后台服务未响应，请刷新页面或重新加载扩展。");
+  }
+
   if (!response.success) {
     throw new Error(response.error || "Lookup failed");
   }
