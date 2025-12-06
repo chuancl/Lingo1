@@ -13,11 +13,12 @@ interface WordListProps {
     mergeConfig: MergeStrategyConfig;
     isAllWordsTab: boolean;
     searchQuery: string;
+    ttsSpeed?: number;
 }
 
 export const WordList: React.FC<WordListProps> = ({ 
     groupedEntries, selectedWords, toggleSelectGroup, isGroupSelected,
-    showConfig, mergeConfig, isAllWordsTab, searchQuery 
+    showConfig, mergeConfig, isAllWordsTab, searchQuery, ttsSpeed = 1.0 
 }) => {
     
     if (groupedEntries.length === 0) {
@@ -53,7 +54,7 @@ export const WordList: React.FC<WordListProps> = ({
                              <span 
                                 className="flex items-center cursor-pointer hover:text-blue-600 transition select-none" 
                                 title="点击播放美式发音"
-                                onClick={(e) => { e.stopPropagation(); playTextToSpeech(primary.text); }}
+                                onClick={(e) => { e.stopPropagation(); playTextToSpeech(primary.text, 'US', ttsSpeed); }}
                              >
                                 <span className="text-[10px] mr-1 text-slate-400 font-sans">US</span> 
                                 {primary.phoneticUs} 
@@ -91,14 +92,19 @@ export const WordList: React.FC<WordListProps> = ({
 
                                   if (item.id === 'context' && entry.contextSentence) {
                                     return (
-                                      <div key={`${entry.id}-context`} className="bg-slate-50 p-3.5 rounded-lg border border-slate-100 relative group/ctx">
+                                      <div 
+                                        key={`${entry.id}-context`} 
+                                        className="bg-slate-50 p-3.5 rounded-lg border border-slate-100 relative group/ctx cursor-pointer hover:bg-slate-100 transition"
+                                        onClick={() => playTextToSpeech(entry.contextSentence!, 'US', ttsSpeed)}
+                                        title="点击朗读例句"
+                                      >
                                         <div className="absolute left-0 top-3 w-1 h-8 bg-blue-500 rounded-r"></div>
                                         {idx === 0 && <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1.5 pl-2">来源原句 (Context)</span>}
                                         <p className="text-sm text-slate-700 leading-relaxed pl-2 mb-2">{entry.contextSentence}</p>
                                         
                                         {entry.sourceUrl && (
                                           <div className="pl-2 mt-2 pt-2 border-t border-slate-200/50 flex items-center gap-3">
-                                            <a href={entry.sourceUrl} target="_blank" rel="noopener noreferrer" className="flex items-center text-xs text-blue-600 hover:underline">
+                                            <a href={entry.sourceUrl} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="flex items-center text-xs text-blue-600 hover:underline">
                                               <MapPin className="w-3 h-3 mr-1" />
                                               来源 {group.length > 1 && `#${idx + 1}`}
                                               <ExternalLink className="w-3 h-3 ml-1 opacity-50" />
@@ -111,7 +117,12 @@ export const WordList: React.FC<WordListProps> = ({
                                   }
                                   if (item.id === 'mixed' && entry.mixedSentence) {
                                      return (
-                                       <div key={`${entry.id}-mixed`} className="bg-slate-50 p-3.5 rounded-lg border border-slate-100 relative">
+                                       <div 
+                                          key={`${entry.id}-mixed`} 
+                                          className="bg-slate-50 p-3.5 rounded-lg border border-slate-100 relative cursor-pointer hover:bg-slate-100 transition"
+                                          onClick={() => playTextToSpeech(entry.mixedSentence!, 'US', ttsSpeed)}
+                                          title="点击朗读例句"
+                                       >
                                           <div className="absolute left-0 top-3 w-1 h-8 bg-purple-500 rounded-r"></div>
                                          {idx === 0 && <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1.5 pl-2">中英混合 (Mixed)</span>}
                                          <p className="text-sm text-slate-700 leading-relaxed pl-2">{entry.mixedSentence}</p>
@@ -120,7 +131,12 @@ export const WordList: React.FC<WordListProps> = ({
                                   }
                                   if (item.id === 'dictionary' && entry.dictionaryExample) {
                                      return (
-                                        <div key={`${entry.id}-dictionary`} className="bg-slate-50 p-3.5 rounded-lg border border-slate-100 relative">
+                                        <div 
+                                            key={`${entry.id}-dictionary`} 
+                                            className="bg-slate-50 p-3.5 rounded-lg border border-slate-100 relative cursor-pointer hover:bg-slate-100 transition"
+                                            onClick={() => playTextToSpeech(entry.dictionaryExample!, 'US', ttsSpeed)}
+                                            title="点击朗读例句"
+                                        >
                                           <div className="absolute left-0 top-3 w-1 h-8 bg-emerald-500 rounded-r"></div>
                                           {idx === 0 && <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1.5 pl-2">词典例句 (Dictionary)</span>}
                                           <p className="text-sm text-slate-600 italic leading-relaxed pl-2">{entry.dictionaryExample}</p>

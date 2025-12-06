@@ -1,5 +1,4 @@
 
-
 import React, { useState } from 'react';
 import { AutoTranslateConfig } from '../../types';
 import { ShieldAlert, ShieldCheck, X, Mic2 } from 'lucide-react';
@@ -67,32 +66,32 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({ config, setConfi
                <h3 className="font-bold text-slate-900">语音合成速度</h3>
            </div>
            <div className="flex items-center gap-4">
-              <span className="text-xs text-slate-500 font-medium">0.5x</span>
+              <span className="text-xs text-slate-500 font-medium">0.25x</span>
               <div className="flex-1 relative h-6 flex items-center">
                    <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                       {/* Calculate percentage for width: 0.5->2.0 range. Formula: (val - 0.5) / 1.5 * 100 */}
+                       {/* Calculate percentage for width: 0.25->3.0 range. Formula: (val - 0.25) / 2.75 * 100 */}
                        <div 
                          className="h-full bg-blue-500 rounded-full transition-all duration-150" 
-                         style={{width: `${Math.max(0, Math.min(100, ((config.ttsSpeed || 1.0) - 0.5) / 1.5 * 100))}%`}}
+                         style={{width: `${Math.max(0, Math.min(100, ((config.ttsSpeed || 1.0) - 0.25) / 2.75 * 100))}%`}}
                        ></div>
                    </div>
                    <input 
                      type="range" 
-                     min="0.5" 
-                     max="2.0" 
-                     step="0.1"
+                     min="0.25" 
+                     max="3.0" 
+                     step="0.25"
                      value={config.ttsSpeed || 1.0}
                      onChange={(e) => setConfig({...config, ttsSpeed: parseFloat(e.target.value)})}
                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                    />
                    <div 
                       className="absolute w-4 h-4 bg-white border-2 border-blue-600 rounded-full shadow pointer-events-none transition-all duration-150"
-                      style={{left: `${Math.max(0, Math.min(100, ((config.ttsSpeed || 1.0) - 0.5) / 1.5 * 100))}%`, transform: 'translateX(-50%)'}}
+                      style={{left: `${Math.max(0, Math.min(100, ((config.ttsSpeed || 1.0) - 0.25) / 2.75 * 100))}%`, transform: 'translateX(-50%)'}}
                    ></div>
               </div>
-              <span className="text-xs text-slate-500 font-medium">2.0x</span>
+              <span className="text-xs text-slate-500 font-medium">3.0x</span>
               <div className="min-w-[40px] text-right text-sm font-bold text-slate-700">
-                  {(config.ttsSpeed || 1.0).toFixed(1)}x
+                  {(config.ttsSpeed || 1.0).toFixed(2)}x
               </div>
            </div>
         </div>

@@ -118,6 +118,7 @@ const App: React.FC = () => {
                   scenarios={scenarios} 
                   entries={entries} 
                   setEntries={setEntries} 
+                  ttsSpeed={autoTranslate.ttsSpeed || 1.0}
                />
              </div>
           )}

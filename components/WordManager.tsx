@@ -25,9 +25,10 @@ interface WordManagerProps {
   scenarios: Scenario[];
   entries: WordEntry[];
   setEntries: React.Dispatch<React.SetStateAction<WordEntry[]>>;
+  ttsSpeed?: number;
 }
 
-export const WordManager: React.FC<WordManagerProps> = ({ scenarios, entries, setEntries }) => {
+export const WordManager: React.FC<WordManagerProps> = ({ scenarios, entries, setEntries, ttsSpeed = 1.0 }) => {
   const [activeTab, setActiveTab] = useState<WordTab>('all');
   const [selectedScenarioId, setSelectedScenarioId] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -581,6 +582,7 @@ export const WordManager: React.FC<WordManagerProps> = ({ scenarios, entries, se
            mergeConfig={mergeConfig}
            isAllWordsTab={isAllWordsTab}
            searchQuery={searchQuery}
+           ttsSpeed={ttsSpeed}
         />
       </div>
     </div>
