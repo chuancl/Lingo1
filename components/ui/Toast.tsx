@@ -20,37 +20,33 @@ export const Toast: React.FC<ToastProps> = ({ toast, onClose }) => {
     if (toast) {
       const timer = setTimeout(() => {
         onClose();
-      }, 3000); // 3 seconds duration
+      }, 5000); // 5 seconds duration
       return () => clearTimeout(timer);
     }
   }, [toast, onClose]);
 
   if (!toast) return null;
 
-  const bgColors = {
-    success: 'bg-slate-800 text-white',
-    error: 'bg-red-600 text-white',
-    warning: 'bg-amber-500 text-white',
-    info: 'bg-blue-600 text-white',
+  // Modern, cleaner style: White bg, colored icon/text, side border
+  const styles = {
+    success: { border: 'border-l-4 border-emerald-500', iconColor: 'text-emerald-500', icon: <CheckCircle /> },
+    error: { border: 'border-l-4 border-red-500', iconColor: 'text-red-500', icon: <AlertCircle /> },
+    warning: { border: 'border-l-4 border-amber-500', iconColor: 'text-amber-500', icon: <AlertCircle /> },
+    info: { border: 'border-l-4 border-blue-500', iconColor: 'text-blue-500', icon: <Info /> },
   };
 
-  const icons = {
-    success: <CheckCircle className="w-5 h-5" />,
-    error: <AlertCircle className="w-5 h-5" />,
-    warning: <AlertCircle className="w-5 h-5" />,
-    info: <Info className="w-5 h-5" />,
-  };
+  const currentStyle = styles[toast.type];
 
   return (
-    <div className="fixed bottom-10 left-1/2 transform -translate-x-1/2 z-[9999] animate-in slide-in-from-bottom-5 fade-in duration-300">
-      <div className={`${bgColors[toast.type]} px-4 py-3 rounded-lg shadow-lg shadow-slate-300/50 flex items-center gap-3 min-w-[300px] max-w-md`}>
-        <div className="shrink-0">
-            {icons[toast.type]}
+    <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[9999] animate-in zoom-in-95 fade-in duration-300 pointer-events-none">
+      <div className={`bg-white px-6 py-5 rounded-lg shadow-2xl shadow-slate-400/20 flex items-start gap-4 min-w-[320px] max-w-md border border-slate-100 ${currentStyle.border} pointer-events-auto`}>
+        <div className={`shrink-0 mt-0.5 ${currentStyle.iconColor}`}>
+            {React.cloneElement(currentStyle.icon as any, { className: "w-6 h-6" })}
         </div>
-        <div className="flex-1 text-sm font-medium leading-tight">
+        <div className="flex-1 text-sm font-medium text-slate-700 leading-relaxed">
           {toast.message}
         </div>
-        <button onClick={onClose} className="p-1 hover:bg-white/20 rounded transition shrink-0">
+        <button onClick={onClose} className="p-1 -mt-1 -mr-2 text-slate-400 hover:text-slate-600 rounded transition shrink-0">
             <X className="w-4 h-4" />
         </button>
       </div>

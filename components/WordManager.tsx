@@ -285,11 +285,11 @@ export const WordManager: React.FC<WordManagerProps> = ({ scenarios, entries, se
             setEntries(prev => [...prev, ...validEntries]);
             let msg = `成功导入 ${validEntries.length} 个单词。`;
             if (duplicateCount > 0) msg += ` (跳过 ${duplicateCount} 个重复)`;
-            if (conflictCount > 0) msg += ` (跳过 ${conflictCount} 个互斥冲突)`;
+            if (conflictCount > 0) msg += ` (跳过 ${conflictCount} 个互斥)`;
             showToast(msg, 'success');
         } else {
             if (conflictCount > 0 || duplicateCount > 0) {
-                showToast(`导入失败: ${duplicateCount} 个重复，${conflictCount} 个冲突`, 'warning');
+                showToast(`导入失败: ${duplicateCount} 个重复，${conflictCount} 个因已存在于其他列表而跳过`, 'warning');
             } else {
                 showToast('未能解析有效单词或文件为空', 'error');
             }
@@ -300,6 +300,9 @@ export const WordManager: React.FC<WordManagerProps> = ({ scenarios, entries, se
   };
 
   const handleAddWord = (text: string, translation: string) => {
+     // Always close modal immediately as requested
+     setIsAddModalOpen(false);
+
      if (!text) {
          showToast('请输入单词拼写', 'warning');
          return;
@@ -310,7 +313,7 @@ export const WordManager: React.FC<WordManagerProps> = ({ scenarios, entries, se
      // 1. Logic for adding to Want/Learning -> Check Known
      if (targetCategory === WordCategory.WantToLearnWord || targetCategory === WordCategory.LearningWord) {
          if (existsInKnown(text, translation)) {
-             showToast('该单词已在“已掌握”列表中，无法重复添加。', 'error');
+             showToast(`"${text}" 已在“已掌握”列表中。已掌握的单词无需重复添加。`, 'warning');
              return;
          }
      }
@@ -320,19 +323,19 @@ export const WordManager: React.FC<WordManagerProps> = ({ scenarios, entries, se
          const existing = findInLearningOrWant(text, translation);
          if (existing) {
              const categoryName = existing.category === WordCategory.WantToLearnWord ? '想学习' : '正在学';
-             showToast(`该单词已在“${categoryName}”中。请前往该列表将其“移至已掌握”，勿重复新建。`, 'error');
+             showToast(`"${text}" 已在“${categoryName}”列表中。请前往该列表将其移动至“已掌握”，不仅能保留记录，还能让流程更清晰。`, 'warning');
              return;
          }
      }
      
-     // 3. Check duplicate in current category (Basic check)
+     // 3. Check duplicate in current category
      const existsInTarget = entries.some(e => 
         e.category === targetCategory && 
         e.text.toLowerCase().trim() === text.toLowerCase().trim() &&
         e.translation?.trim() === translation.trim()
      );
      if (existsInTarget) {
-         showToast('该单词已存在于当前列表中', 'warning');
+         showToast(`"${text}" 已存在于当前列表中。`, 'warning');
          return;
      }
 
@@ -347,9 +350,7 @@ export const WordManager: React.FC<WordManagerProps> = ({ scenarios, entries, se
         phoneticUs: ''
      };
      setEntries(prev => [entry, ...prev]);
-     
      showToast('添加成功', 'success');
-     setIsAddModalOpen(false); // Auto close modal on success
   };
 
   const handleDragStart = (index: number) => setDraggedItemIndex(index);
@@ -513,7 +514,7 @@ export const WordManager: React.FC<WordManagerProps> = ({ scenarios, entries, se
                     </button>
                  </>
               ) : (
-                  /* Standard Add/Import/Export Buttons - Available for ALL tabs including Known */
+                  /* Standard Add/Import/Export Buttons - Available for ALL specific tabs */
                   <>
                     {!isAllWordsTab && (
                         <>
