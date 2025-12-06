@@ -3,6 +3,7 @@
 
 
 
+
 import ReactDOM from 'react-dom/client';
 import React, { useState, useEffect, useRef } from 'react';
 import { PageWidget } from '../../components/PageWidget';
@@ -15,7 +16,7 @@ import { createShadowRootUi } from 'wxt/client';
 import { findFuzzyMatches } from '../../utils/matching';
 import { buildReplacementHtml } from '../../utils/dom-builder';
 import { browser } from 'wxt/browser';
-import { preloadVoices } from '../../utils/audio';
+import { preloadVoices, unlockAudio } from '../../utils/audio';
 
 // --- Overlay App Component (Manages Widget & Bubbles) ---
 interface ContentOverlayProps {
@@ -73,6 +74,26 @@ const ContentOverlay: React.FC<ContentOverlayProps> = ({
           }
       }
   }, [entries, hoveredEntry]);
+
+  // --- Audio Unlocker ---
+  // Browsers often block speech synthesis until the user has interacted with the document.
+  // We add a one-time listener to the document to "warm up" the audio engine.
+  useEffect(() => {
+      const handleUserInteraction = () => {
+          unlockAudio();
+          // Remove listeners once triggered
+          document.removeEventListener('click', handleUserInteraction);
+          document.removeEventListener('keydown', handleUserInteraction);
+      };
+
+      document.addEventListener('click', handleUserInteraction);
+      document.addEventListener('keydown', handleUserInteraction);
+
+      return () => {
+          document.removeEventListener('click', handleUserInteraction);
+          document.removeEventListener('keydown', handleUserInteraction);
+      };
+  }, []);
 
   // Global Event Listener for Bubbles
   useEffect(() => {

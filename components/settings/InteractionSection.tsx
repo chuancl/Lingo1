@@ -1,9 +1,11 @@
 
 
 
+
+
 import React from 'react';
 import { WordInteractionConfig, InteractionTrigger, ModifierKey, MouseAction, BubblePosition } from '../../types';
-import { Volume2, Info, ArrowUp, ArrowDown, ArrowLeft, ArrowRight } from 'lucide-react';
+import { Volume2, Info, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Plus } from 'lucide-react';
 import { playTextToSpeech } from '../../utils/audio';
 
 const Tooltip: React.FC<{ text: string; children: React.ReactNode }> = ({ text, children }) => {
@@ -90,6 +92,28 @@ interface InteractionSectionProps {
 }
 
 export const InteractionSection: React.FC<InteractionSectionProps> = ({ config, setConfig }) => {
+  
+  // Dynamic positioning for the preview bubble
+  const getPreviewPositionClass = (pos: BubblePosition) => {
+     switch(pos) {
+         case 'top': return 'bottom-full left-1/2 -translate-x-1/2 mb-3';
+         case 'bottom': return 'top-full left-1/2 -translate-x-1/2 mt-3';
+         case 'left': return 'right-full top-1/2 -translate-y-1/2 mr-3';
+         case 'right': return 'left-full top-1/2 -translate-y-1/2 ml-3';
+         default: return 'bottom-full left-1/2 -translate-x-1/2 mb-3';
+     }
+  };
+
+  const getArrowClass = (pos: BubblePosition) => {
+     switch(pos) {
+         case 'top': return 'bottom-[-6px] left-[calc(50%-6px)] border-b-transparent border-r-transparent';
+         case 'bottom': return 'top-[-6px] left-[calc(50%-6px)] border-t-transparent border-l-transparent';
+         case 'left': return 'right-[-6px] top-[calc(50%-6px)] border-b-transparent border-l-transparent';
+         case 'right': return 'left-[-6px] top-[calc(50%-6px)] border-t-transparent border-r-transparent';
+         default: return 'bottom-[-6px] left-[calc(50%-6px)]';
+     }
+  };
+
   return (
     <section className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="p-6 border-b border-slate-200">
@@ -199,20 +223,32 @@ export const InteractionSection: React.FC<InteractionSectionProps> = ({ config, 
                  <div className="relative">
                     <span className="text-xl font-serif text-slate-800 cursor-pointer border-b-2 border-red-200">ephemeral</span>
                     
-                    {/* The Bubble */}
-                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 w-64 bg-white rounded-lg shadow-xl border border-slate-200 p-5 z-10">
+                    {/* The Bubble - Dynamically Positioned */}
+                    <div className={`absolute w-64 bg-white rounded-lg shadow-xl border border-slate-200 p-5 z-10 transition-all duration-300 ${getPreviewPositionClass(config.bubblePosition)}`}>
+                       
+                       {/* Arrow - Dynamically Positioned */}
+                       <div className={`absolute w-3 h-3 bg-white border border-slate-200 transform rotate-45 z-[-1] ${getArrowClass(config.bubblePosition)}`}></div>
+
                        <div className="flex justify-between items-start mb-3">
                           <div>
                              <h4 className="font-bold text-xl text-slate-900 leading-tight mb-1">ephemeral</h4>
                              {config.showPhonetic && <span className="text-xs text-slate-400 font-mono block">/əˈfem(ə)rəl/</span>}
                           </div>
-                          <button 
-                              className="text-slate-400 hover:text-blue-600 p-1 rounded-full transition-colors"
-                              onClick={() => playTextToSpeech("ephemeral", config.autoPronounceAccent, 1.0, 1)}
-                              title="点击播放 (使用当前口音)"
-                          >
-                              <Volume2 className="w-4 h-4"/>
-                          </button>
+                          <div className="flex gap-2">
+                             <button 
+                                 className="text-slate-400 hover:text-blue-600 p-1.5 rounded-full transition-colors bg-transparent"
+                                 onClick={() => playTextToSpeech("ephemeral", config.autoPronounceAccent, 1.0, 1)}
+                                 title="点击播放"
+                             >
+                                 <Volume2 className="w-4 h-4"/>
+                             </button>
+                             <button 
+                                 className="text-blue-600 bg-blue-50 hover:bg-blue-100 p-1.5 rounded-full transition-colors"
+                                 title="添加到正在学"
+                             >
+                                 <Plus className="w-4 h-4"/>
+                             </button>
+                          </div>
                        </div>
                        
                        {config.showDictTranslation && (

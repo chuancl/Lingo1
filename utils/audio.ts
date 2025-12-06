@@ -34,6 +34,23 @@ export const stopAudio = () => {
 };
 
 /**
+ * Tries to unlock the audio context/speech synthesis on first user interaction.
+ * This plays a silent, zero-length utterance to satisfy browser autoplay policies.
+ */
+export const unlockAudio = () => {
+    const synth = window.speechSynthesis;
+    if (synth.paused) {
+        synth.resume();
+    }
+    // Create a dummy utterance
+    const u = new SpeechSynthesisUtterance('');
+    u.volume = 0; // Silent
+    u.rate = 10;  // Fast
+    u.text = ' '; 
+    synth.speak(u);
+};
+
+/**
  * Waits for voices to be loaded (with timeout fallback).
  */
 const waitForVoices = (): Promise<SpeechSynthesisVoice[]> => {
