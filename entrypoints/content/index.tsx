@@ -144,7 +144,13 @@ const ContentOverlay: React.FC<ContentOverlayProps> = ({ initialWidgetConfig, in
   };
 
   return (
-    <div className="reset-shadow-dom text-slate-900 font-sans text-base leading-normal">
+    <div className="reset-shadow-dom" style={{
+        all: 'initial', 
+        fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+        fontSize: '16px',
+        lineHeight: '1.5',
+        color: '#0f172a'
+    }}>
        {/* 1. Page Widget (Floating Ball) */}
        <PageWidget 
           config={widgetConfig}
