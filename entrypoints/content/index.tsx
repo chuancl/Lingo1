@@ -51,6 +51,16 @@ const ContentOverlay: React.FC<ContentOverlayProps> = ({ initialWidgetConfig, in
     return () => unsubs.forEach(u => u());
   }, [entries]);
 
+  // Keep hoveredEntry up to date if entries change (e.g. category update)
+  useEffect(() => {
+      if (hoveredEntry) {
+          const updated = entries.find(e => e.id === hoveredEntry.id);
+          if (updated && updated.category !== hoveredEntry.category) {
+              setHoveredEntry(updated);
+          }
+      }
+  }, [entries, hoveredEntry]);
+
   // Global Event Listener for Bubbles
   useEffect(() => {
      const handleMouseOver = (e: MouseEvent) => {

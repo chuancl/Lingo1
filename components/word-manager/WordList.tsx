@@ -2,6 +2,7 @@
 import React from 'react';
 import { WordEntry, WordCategory, MergeStrategyConfig, WordTab } from '../../types';
 import { PlayCircle, MapPin, ExternalLink, Filter } from 'lucide-react';
+import { playTextToSpeech } from '../../utils/audio';
 
 interface WordListProps {
     groupedEntries: WordEntry[][];
@@ -49,7 +50,15 @@ export const WordList: React.FC<WordListProps> = ({
                         <h3 className="text-2xl font-bold text-slate-900 tracking-tight">{primary.text}</h3>
                         {showConfig.showPhonetic && primary.phoneticUs && (
                           <div className="flex items-center text-sm text-slate-500 space-x-3 font-mono bg-slate-50 px-2 py-1 rounded-lg border border-slate-100">
-                             <span className="flex items-center cursor-pointer hover:text-blue-600 transition" title="美式发音"><span className="text-[10px] mr-1 text-slate-400 font-sans">US</span> {primary.phoneticUs} <PlayCircle className="w-3.5 h-3.5 ml-1 opacity-50 group-hover:opacity-100"/></span>
+                             <span 
+                                className="flex items-center cursor-pointer hover:text-blue-600 transition select-none" 
+                                title="点击播放美式发音"
+                                onClick={(e) => { e.stopPropagation(); playTextToSpeech(primary.text); }}
+                             >
+                                <span className="text-[10px] mr-1 text-slate-400 font-sans">US</span> 
+                                {primary.phoneticUs} 
+                                <PlayCircle className="w-3.5 h-3.5 ml-1 opacity-50 group-hover:opacity-100"/>
+                             </span>
                           </div>
                         )}
                         {/* Show Category badge if in 'All Words' tab */}

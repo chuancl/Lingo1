@@ -2,6 +2,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { WordEntry, WordInteractionConfig, WordCategory } from '../types';
 import { Volume2, Plus, Check } from 'lucide-react';
+import { playTextToSpeech } from '../utils/audio';
 
 interface WordBubbleProps {
   entry: WordEntry | null;
@@ -46,10 +47,7 @@ export const WordBubble: React.FC<WordBubbleProps> = ({
   const playAudio = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!entry) return;
-    const text = entry.text;
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = config.autoPronounceAccent === 'UK' ? 'en-GB' : 'en-US';
-    window.speechSynthesis.speak(utterance);
+    playTextToSpeech(entry.text, config.autoPronounceAccent);
   };
 
   useEffect(() => {

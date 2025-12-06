@@ -1,7 +1,9 @@
+
 import React from 'react';
 import { PageWidgetConfig, WordTab, WordCategory, WordEntry } from '../../types';
 import { X, Settings2, CheckSquare, Square, BookOpen, GripVertical, Download, ExternalLink, PlayCircle, Filter } from 'lucide-react';
 import { browser } from 'wxt/browser';
+import { playTextToSpeech } from '../../utils/audio';
 
 interface WidgetWindowProps {
     config: PageWidgetConfig;
@@ -248,9 +250,14 @@ export const WidgetWindow: React.FC<WidgetWindowProps> = ({
                                         
                                         {config.showPhonetic && word.phoneticUs && (
                                             <div className="flex items-center text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 font-mono">
-                                                <span className="text-[10px] text-slate-400 mr-1 font-sans select-none">US</span> 
-                                                {word.phoneticUs}
-                                                <PlayCircle className="w-3 h-3 ml-1.5 opacity-50 cursor-pointer hover:opacity-100 hover:text-blue-600"/>
+                                                <span 
+                                                    className="flex items-center cursor-pointer hover:text-blue-600 transition select-none"
+                                                    onClick={(e) => { e.stopPropagation(); playTextToSpeech(word.text); }}
+                                                >
+                                                    <span className="text-[10px] text-slate-400 mr-1 font-sans">US</span> 
+                                                    {word.phoneticUs}
+                                                    <PlayCircle className="w-3 h-3 ml-1.5 opacity-50 hover:opacity-100"/>
+                                                </span>
                                             </div>
                                         )}
                                         
