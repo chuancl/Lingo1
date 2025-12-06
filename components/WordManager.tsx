@@ -2,18 +2,19 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { WordCategory, WordEntry, MergeStrategyConfig, WordTab, Scenario } from '../types';
 import { DEFAULT_MERGE_STRATEGY } from '../constants';
-import { Upload, Download, Filter, Settings2, List, Search, Plus, Trash2, CheckSquare, Square, ArrowRight, BookOpen, GraduationCap, CheckCircle, RotateCcw } from 'lucide-react';
+import { Upload, Download, Filter, Settings2, List, Search, Plus, Trash2, CheckSquare, Square, ArrowRight, BookOpen, GraduationCap, CheckCircle, RotateCcw, HelpCircle } from 'lucide-react';
 import { MergeConfigModal } from './word-manager/MergeConfigModal';
 import { AddWordModal } from './word-manager/AddWordModal';
 import { WordList } from './word-manager/WordList';
 import { Toast, ToastMessage } from './ui/Toast';
-import { entriesStorage } from '../utils/storage';
+import { entriesStorage, enginesStorage } from '../utils/storage';
+import { fetchWordDetails } from '../utils/dictionary-service';
 
 const Tooltip: React.FC<{ text: string; children: React.ReactNode }> = ({ text, children }) => {
   return (
     <div className="group relative flex items-center">
       {children}
-      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-xs text-white bg-slate-800 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">
+      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-xs text-white bg-slate-800 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10 whitespace-pre-line text-center">
         {text}
         <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-slate-800"></div>
       </div>
@@ -195,8 +196,6 @@ export const WordManager: React.FC<WordManagerProps> = ({ scenarios, entries, se
 
   const handleExport = () => {
      let dataToExport: WordEntry[];
-     
-     // If words are selected, export only those. Otherwise export current view.
      if (selectedWords.size > 0) {
         dataToExport = entries.filter(e => selectedWords.has(e.id));
      } else {
@@ -225,147 +224,232 @@ export const WordManager: React.FC<WordManagerProps> = ({ scenarios, entries, se
      if (fileInputRef.current) fileInputRef.current.click();
   };
 
-  const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
      const file = e.target.files?.[0];
      if (!file) return;
 
      const reader = new FileReader();
-     reader.onload = (event) => {
+     reader.onload = async (event) => {
         const text = event.target?.result as string;
-        let candidates: Partial<WordEntry>[] = [];
+        let candidates: { text: string, translation?: string }[] = [];
         
         try {
+           // Try JSON first
            const json = JSON.parse(text);
            if (Array.isArray(json)) {
-               candidates = json;
+               // Supports simple [{"text": "apple", "translation": "苹果"}] or just [{"text": "apple"}]
+               candidates = json.map(item => ({ text: item.text, translation: item.translation || item.preferredTranslation }));
            }
         } catch (err) {
-           const lines = text.split('\n').filter(l => l.trim());
-           candidates = lines.map((line) => ({
-              text: line.trim(),
-              translation: '',
-           }));
+           // Fallback to TXT
+           // Supports: "apple, banana, orange" OR "apple 苹果, banana 香蕉"
+           // Split by common delimiters: newline, comma, Chinese comma
+           const parts = text.split(/[\n,，]+/).filter(p => p.trim());
+           
+           candidates = parts.map(part => {
+               const cleaned = part.trim();
+               // Regex to find "EnglishWord [Spaces] ChineseTranslation"
+               // Looks for English part at start, optional space, then Chinese/Other part
+               const match = cleaned.match(/^([a-zA-Z0-9\-\s]+?)(?:\s+([\u4e00-\u9fa5].*))?$/);
+               if (match) {
+                   return {
+                       text: match[1].trim(),
+                       translation: match[2]?.trim()
+                   };
+               }
+               // If no chinese found, assume whole thing is word
+               return { text: cleaned };
+           });
         }
 
         const targetCategory = activeTab === 'all' ? WordCategory.WantToLearnWord : activeTab;
-        const validEntries: WordEntry[] = [];
-        let duplicateCount = 0; // Already in strict category
-        let conflictCount = 0; // Exists in mutually exclusive set
+        const engines = await enginesStorage.getValue();
+        const activeEngine = engines.find(e => e.isEnabled);
+        
+        if (!activeEngine) {
+            showToast("未启用任何翻译引擎，无法完成智能导入", "error");
+            return;
+        }
 
-        candidates.forEach((c, idx) => {
-            if (c.text) {
-                 const text = c.text;
-                 const trans = c.translation || '';
+        // Process in batches or sequential to avoid rate limits? 
+        // For now, sequential to be safe with AI engines.
+        let successCount = 0;
+        let conflictCount = 0;
+        let duplicateCount = 0;
+        let failCount = 0;
 
-                 // 1. Same category duplicate check
-                 const existsInTarget = entries.some(e => 
-                    e.category === targetCategory && 
-                    e.text.toLowerCase().trim() === text.toLowerCase().trim() &&
-                    e.translation?.trim() === trans.trim()
-                 );
+        showToast(`开始处理 ${candidates.length} 个单词，请稍候...`, 'info');
 
-                 if (existsInTarget) {
-                     duplicateCount++;
-                     return;
-                 }
+        const newEntriesToAdd: WordEntry[] = [];
 
-                 // 2. Cross-category exclusivity check
-                 if (targetCategory === WordCategory.WantToLearnWord || targetCategory === WordCategory.LearningWord) {
-                     if (existsInKnown(text, trans)) {
-                         conflictCount++;
-                         return;
+        // We process import by reusing the logic: fetch details -> check existence -> add
+        for (const candidate of candidates) {
+            if (!candidate.text) continue;
+            
+            try {
+                // 1. Fetch details
+                const detailsList = await fetchWordDetails(candidate.text, candidate.translation, activeEngine);
+
+                for (const details of detailsList) {
+                     if (!details.text || !details.translation) continue;
+
+                     // 2. Check Exclusivity (Known vs Learning/Want)
+                     if (targetCategory === WordCategory.WantToLearnWord || targetCategory === WordCategory.LearningWord) {
+                        if (existsInKnown(details.text, details.translation)) {
+                            conflictCount++;
+                            continue;
+                        }
+                     } else if (targetCategory === WordCategory.KnownWord) {
+                        const existing = findInLearningOrWant(details.text, details.translation);
+                        if (existing) {
+                            conflictCount++;
+                            continue;
+                        }
                      }
-                 } else if (targetCategory === WordCategory.KnownWord) {
-                     const existing = findInLearningOrWant(text, trans);
-                     if (existing) {
-                         conflictCount++;
-                         return;
+
+                     // 3. Check Duplicate in current list
+                     const existsInTarget = entries.some(e => 
+                        e.category === targetCategory && 
+                        e.text.toLowerCase().trim() === details.text!.toLowerCase().trim() &&
+                        e.translation?.trim() === details.translation!.trim()
+                     ) || newEntriesToAdd.some(e => 
+                        e.category === targetCategory && 
+                        e.text.toLowerCase().trim() === details.text!.toLowerCase().trim() &&
+                        e.translation?.trim() === details.translation!.trim()
+                     );
+
+                     if (existsInTarget) {
+                         duplicateCount++;
+                         continue;
                      }
-                 }
-                 
-                 validEntries.push({
-                    id: c.id || `import-${Date.now()}-${idx}`,
-                    text: text,
-                    translation: c.translation || '待获取...',
-                    category: targetCategory,
-                    addedAt: c.addedAt || Date.now(),
-                    scenarioId: c.scenarioId || (selectedScenarioId === 'all' ? '1' : selectedScenarioId),
-                    phoneticUs: c.phoneticUs || '',
-                    contextSentence: c.contextSentence || 'Imported word.'
-                 } as WordEntry);
+
+                     newEntriesToAdd.push({
+                        id: `import-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                        text: details.text!,
+                        translation: details.translation!,
+                        phoneticUs: details.phoneticUs,
+                        phoneticUk: details.phoneticUk,
+                        contextSentence: details.contextSentence,
+                        mixedSentence: details.mixedSentence,
+                        dictionaryExample: details.dictionaryExample,
+                        category: targetCategory,
+                        addedAt: Date.now(),
+                        scenarioId: selectedScenarioId === 'all' ? '1' : selectedScenarioId,
+                     });
+                     successCount++;
+                }
+
+            } catch (err) {
+                console.error(`Failed to import ${candidate.text}:`, err);
+                failCount++;
             }
-        });
+        }
 
-        if (validEntries.length > 0) {
-            setEntries(prev => [...prev, ...validEntries]);
-            let msg = `成功导入 ${validEntries.length} 个单词。`;
-            if (duplicateCount > 0) msg += ` (跳过 ${duplicateCount} 个重复)`;
-            if (conflictCount > 0) msg += ` (跳过 ${conflictCount} 个互斥)`;
-            showToast(msg, 'success');
+        if (newEntriesToAdd.length > 0) {
+            setEntries(prev => [...prev, ...newEntriesToAdd]);
+            showToast(`导入完成: 成功 ${successCount}, 重复 ${duplicateCount}, 互斥跳过 ${conflictCount}, 失败 ${failCount}`, 'success');
         } else {
-            if (conflictCount > 0 || duplicateCount > 0) {
-                showToast(`导入失败: ${duplicateCount} 个重复，${conflictCount} 个因已存在于其他列表而跳过`, 'warning');
-            } else {
-                showToast('未能解析有效单词或文件为空', 'error');
-            }
+             showToast(`导入结束，未添加任何新词 (重复/互斥/失败)`, 'warning');
         }
      };
      reader.readAsText(file);
      e.target.value = ''; 
   };
 
-  const handleAddWord = (text: string, translation: string) => {
-     // Always close modal immediately as requested
-     setIsAddModalOpen(false);
+  const handleAddWord = async (text: string, translation: string) => {
+     const engines = await enginesStorage.getValue();
+     const activeEngine = engines.find(e => e.isEnabled);
 
-     if (!text) {
-         showToast('请输入单词拼写', 'warning');
+     if (!activeEngine) {
+         showToast("请先在设置中启用一个翻译引擎", "error");
+         setIsAddModalOpen(false); // Close modal
          return;
      }
 
-     const targetCategory = activeTab === 'all' ? WordCategory.WantToLearnWord : activeTab;
+     try {
+         // 1. Call Dictionary Service
+         const detailsList = await fetchWordDetails(text, translation, activeEngine);
 
-     // 1. Logic for adding to Want/Learning -> Check Known
-     if (targetCategory === WordCategory.WantToLearnWord || targetCategory === WordCategory.LearningWord) {
-         if (existsInKnown(text, translation)) {
-             showToast(`"${text}" 已在“已掌握”列表中。已掌握的单词无需重复添加。`, 'warning');
+         if (detailsList.length === 0) {
+             showToast("未能获取该单词的详细信息", "error");
+             setIsAddModalOpen(false);
              return;
          }
-     }
-     
-     // 2. Logic for adding to Known -> Check Want/Learning
-     if (targetCategory === WordCategory.KnownWord) {
-         const existing = findInLearningOrWant(text, translation);
-         if (existing) {
-             const categoryName = existing.category === WordCategory.WantToLearnWord ? '想学习' : '正在学';
-             showToast(`"${text}" 已在“${categoryName}”列表中。请前往该列表将其移动至“已掌握”，不仅能保留记录，还能让流程更清晰。`, 'warning');
-             return;
-         }
-     }
-     
-     // 3. Check duplicate in current category
-     const existsInTarget = entries.some(e => 
-        e.category === targetCategory && 
-        e.text.toLowerCase().trim() === text.toLowerCase().trim() &&
-        e.translation?.trim() === translation.trim()
-     );
-     if (existsInTarget) {
-         showToast(`"${text}" 已存在于当前列表中。`, 'warning');
-         return;
-     }
 
-     const entry: WordEntry = {
-        id: `manual-${Date.now()}`,
-        text: text,
-        translation: translation || '自定义释义',
-        category: targetCategory,
-        addedAt: Date.now(),
-        scenarioId: selectedScenarioId === 'all' ? '1' : selectedScenarioId,
-        contextSentence: 'Manually added word.',
-        phoneticUs: ''
-     };
-     setEntries(prev => [entry, ...prev]);
-     showToast('添加成功', 'success');
+         const targetCategory = activeTab === 'all' ? WordCategory.WantToLearnWord : activeTab;
+         const newEntriesToAdd: WordEntry[] = [];
+         let conflictCount = 0;
+         let duplicateCount = 0;
+
+         for (const details of detailsList) {
+             if (!details.text || !details.translation) continue;
+
+             // 2. Logic for adding to Want/Learning -> Check Known
+             if (targetCategory === WordCategory.WantToLearnWord || targetCategory === WordCategory.LearningWord) {
+                 if (existsInKnown(details.text, details.translation)) {
+                     conflictCount++;
+                     continue;
+                 }
+             }
+             
+             // 3. Logic for adding to Known -> Check Want/Learning
+             if (targetCategory === WordCategory.KnownWord) {
+                 const existing = findInLearningOrWant(details.text, details.translation);
+                 if (existing) {
+                     conflictCount++;
+                     continue;
+                 }
+             }
+             
+             // 4. Check duplicate in current category
+             const existsInTarget = entries.some(e => 
+                e.category === targetCategory && 
+                e.text.toLowerCase().trim() === details.text!.toLowerCase().trim() &&
+                e.translation?.trim() === details.translation!.trim()
+             );
+             if (existsInTarget) {
+                 duplicateCount++;
+                 continue;
+             }
+
+             // Add entry
+             newEntriesToAdd.push({
+                id: `manual-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                text: details.text,
+                translation: details.translation,
+                phoneticUs: details.phoneticUs,
+                phoneticUk: details.phoneticUk,
+                contextSentence: details.contextSentence,
+                mixedSentence: details.mixedSentence,
+                dictionaryExample: details.dictionaryExample,
+                category: targetCategory,
+                addedAt: Date.now(),
+                scenarioId: selectedScenarioId === 'all' ? '1' : selectedScenarioId,
+             });
+         }
+
+         setIsAddModalOpen(false);
+
+         if (newEntriesToAdd.length > 0) {
+             setEntries(prev => [...newEntriesToAdd, ...prev]);
+             if (conflictCount > 0 || duplicateCount > 0) {
+                 showToast(`成功添加 ${newEntriesToAdd.length} 个含义 (跳过: ${conflictCount + duplicateCount})`, 'success');
+             } else {
+                 showToast('添加成功', 'success');
+             }
+         } else {
+             if (conflictCount > 0) {
+                 showToast(`未添加: 单词已存在于其他列表 (请检查"已掌握"或"正在学")`, 'warning');
+             } else if (duplicateCount > 0) {
+                 showToast(`未添加: 单词已在当前列表中`, 'warning');
+             }
+         }
+
+     } catch (err: any) {
+         console.error(err);
+         setIsAddModalOpen(false);
+         showToast(`查询失败: ${err.message}`, 'error');
+     }
   };
 
   const handleDragStart = (index: number) => setDraggedItemIndex(index);
@@ -382,6 +466,13 @@ export const WordManager: React.FC<WordManagerProps> = ({ scenarios, entries, se
   const handleDragEnd = () => setDraggedItemIndex(null);
   
   const getTabLabel = (tab: WordTab) => tab === 'all' ? '所有单词' : tab;
+
+  const importTooltip = `
+支持格式:
+1. JSON: [{"text": "apple", "translation": "苹果"}]
+2. TXT (逗号分隔): apple, banana, orange
+3. TXT (空格+中文): apple 苹果, banana 香蕉
+  `;
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col relative min-h-[600px]">
@@ -547,7 +638,7 @@ export const WordManager: React.FC<WordManagerProps> = ({ scenarios, entries, se
                             </button>
                         </Tooltip>
 
-                        <Tooltip text={`导入 TXT/JSON 文件至"${getTabLabel(activeTab)}"`}>
+                        <Tooltip text={importTooltip}>
                             <button 
                                 onClick={triggerImport}
                                 className="flex items-center px-3 py-1.5 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition"

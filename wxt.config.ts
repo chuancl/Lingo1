@@ -6,7 +6,7 @@ export default defineConfig({
     name: 'ContextLingo - 沉浸式英语学习',
     description: '在浏览中文网页时，自动将指定词汇替换为英文，结合上下文沉浸式学习。',
     version: '3.2.0',
-    permissions: ['storage', 'activeTab', 'scripting', 'contextMenus'],
+    permissions: ['storage', 'activeTab', 'scripting', 'contextMenus', 'unlimitedStorage'],
     host_permissions: [
       "https://*.tencentcloudapi.com/*",
       "https://translation.googleapis.com/*",

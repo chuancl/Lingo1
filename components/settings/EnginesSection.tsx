@@ -67,6 +67,11 @@ export const EnginesSection: React.FC<EnginesSectionProps> = ({ engines, setEngi
          // Testing with Target='zh' implies we send English or "Hello" and expect Chinese back to verify key works
          await callTencentTranslation(engine, "Hello", 'zh');
          setEngines(prev => prev.map(e => e.id === id ? { ...e, isTesting: false, testResult: 'success' } : e));
+      } else if (engine.id === 'custom-mock') {
+         // Mock success
+         setTimeout(() => {
+             setEngines(prev => prev.map(e => e.id === id ? { ...e, isTesting: false, testResult: 'success' } : e));
+         }, 500);
       } else {
          throw new Error("此引擎暂未实现真实连接测试 (仅支持腾讯云)");
       }
@@ -172,7 +177,7 @@ export const EnginesSection: React.FC<EnginesSectionProps> = ({ engines, setEngi
                   
                   {engine.isEnabled && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm animate-in fade-in slide-in-from-top-2 cursor-default" onMouseDown={e => e.stopPropagation()}>
-                       {engine.id !== 'google' && engine.id !== 'tencent' && (
+                       {engine.id !== 'google' && engine.id !== 'tencent' && engine.id !== 'custom-mock' && (
                          <input type="password" placeholder="API Key" className="px-3 py-2 border border-slate-300 rounded w-full" defaultValue={engine.apiKey} />
                        )}
                        
