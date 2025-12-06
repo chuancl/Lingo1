@@ -17,7 +17,7 @@ const Tooltip: React.FC<{ text: string; children: React.ReactNode }> = ({ text, 
 };
 
 // Helper to map custom ModifierKey to DOM values
-const getDomModifier = (m: ModifierKey): string | null => {
+const getDomModifier = (m: string): string | null => {
   if (m === 'None') return null;
   if (m === 'Ctrl') return 'Control';
   return m;
@@ -114,7 +114,7 @@ export const InteractionSection: React.FC<InteractionSectionProps> = ({ config, 
       // Basic check for modifier (simplified for preview)
       const { modifier } = config.mainTrigger;
       
-      const domModifier = getDomModifier(modifier as ModifierKey);
+      const domModifier = getDomModifier(modifier);
       const isModifierMatch = !domModifier || e.getModifierState(domModifier);
 
       if (!isModifierMatch) return;
@@ -137,7 +137,7 @@ export const InteractionSection: React.FC<InteractionSectionProps> = ({ config, 
       if (config.mainTrigger.action === 'Hover') {
          // Check modifier if needed (though hover usually implies none or checked during move)
          const { modifier } = config.mainTrigger;
-         const domModifier = getDomModifier(modifier as ModifierKey);
+         const domModifier = getDomModifier(modifier);
          if (domModifier && !e.getModifierState(domModifier)) return;
 
          if (showTimer.current) clearTimeout(showTimer.current);

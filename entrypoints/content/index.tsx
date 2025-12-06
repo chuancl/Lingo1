@@ -29,7 +29,7 @@ const ContentOverlay: React.FC<ContentOverlayProps> = ({
 }) => {
   const [widgetConfig, setWidgetConfig] = useState(initialWidgetConfig);
   const [interactionConfig, setInteractionConfig] = useState(initialInteractionConfig);
-  const [autoTranslateConfig, setAutoTranslateConfig] = useState(initialAutoTranslateConfig); // New State
+  const [autoTranslateConfig, setAutoTranslateConfig] = useState(initialAutoTranslateConfig);
   const [entries, setEntries] = useState(initialEntries);
   
   // Widget Logic
@@ -44,13 +44,24 @@ const ContentOverlay: React.FC<ContentOverlayProps> = ({
   const showTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // --- Refs for Event Listeners (Fix Stale Closures) ---
+  const interactionConfigRef = useRef(interactionConfig);
+  const entriesRef = useRef(entries);
+  const isBubbleVisibleRef = useRef(isBubbleVisible);
+  const hoveredEntryRef = useRef(hoveredEntry);
+
+  useEffect(() => { interactionConfigRef.current = interactionConfig; }, [interactionConfig]);
+  useEffect(() => { entriesRef.current = entries; }, [entries]);
+  useEffect(() => { isBubbleVisibleRef.current = isBubbleVisible; }, [isBubbleVisible]);
+  useEffect(() => { hoveredEntryRef.current = hoveredEntry; }, [hoveredEntry]);
+
   useEffect(() => {
     // Sync Storage Listeners
     const unsubs = [
         pageWidgetConfigStorage.watch(v => v && setWidgetConfig(v)),
         interactionConfigStorage.watch(v => v && setInteractionConfig(v)),
         entriesStorage.watch(v => v && setEntries(v)),
-        autoTranslateConfigStorage.watch(v => v && setAutoTranslateConfig(v)) // Watch config
+        autoTranslateConfigStorage.watch(v => v && setAutoTranslateConfig(v)) 
     ];
 
     const pageContent = document.body.innerText;
@@ -71,12 +82,9 @@ const ContentOverlay: React.FC<ContentOverlayProps> = ({
   }, [entries, hoveredEntry]);
 
   // --- Audio Unlocker ---
-  // Browsers often block speech synthesis until the user has interacted with the document.
-  // We add a one-time listener to the document to "warm up" the audio engine.
   useEffect(() => {
       const handleUserInteraction = () => {
           unlockAudio();
-          // Remove listeners once triggered
           document.removeEventListener('click', handleUserInteraction);
           document.removeEventListener('keydown', handleUserInteraction);
       };
@@ -100,37 +108,42 @@ const ContentOverlay: React.FC<ContentOverlayProps> = ({
       return true;
   };
 
-  // Global Event Listener for Bubbles
+  // Global Event Listener for Bubbles (Using Refs)
   useEffect(() => {
      // 1. Mouse Over (Hover)
      const handleMouseOver = (e: MouseEvent) => {
+         const config = interactionConfigRef.current;
+         const currentEntries = entriesRef.current;
+         const isVisible = isBubbleVisibleRef.current;
+         const currentHovered = hoveredEntryRef.current;
+
          const target = e.target as HTMLElement;
          const entryEl = target.closest('[data-entry-id]') as HTMLElement;
          
          if (entryEl) {
              const id = entryEl.getAttribute('data-entry-id');
              const originalText = entryEl.getAttribute('data-original-text') || '';
-             const entry = entries.find(w => w.id === id);
+             const entry = currentEntries.find(w => w.id === id);
              
              if (entry) {
-                 // Always cancel any pending hide action when entering a valid word (keep alive logic)
+                 // Always cancel any pending hide action when entering a valid word
                  if (hideTimer.current) {
                      clearTimeout(hideTimer.current);
                      hideTimer.current = null;
                  }
                  
-                 // If already visible and same entry, just update rect (in case of movement) but don't re-trigger show
-                 if (isBubbleVisible && hoveredEntry?.id === entry.id) {
+                 // If already visible and same entry, do nothing
+                 if (isVisible && currentHovered?.id === entry.id) {
                      return;
                  }
 
                  // Only trigger SHOW if configured action is 'Hover'
-                 if (interactionConfig.mainTrigger.action === 'Hover') {
-                     // Check modifier (e.g. Hover + Ctrl)
-                     if (checkModifier(e, interactionConfig.mainTrigger.modifier)) {
+                 if (config.mainTrigger.action === 'Hover') {
+                     // Check modifier
+                     if (checkModifier(e, config.mainTrigger.modifier)) {
                          if (showTimer.current) clearTimeout(showTimer.current);
                          
-                         const delay = interactionConfig.mainTrigger.delay;
+                         const delay = config.mainTrigger.delay;
                          showTimer.current = setTimeout(() => {
                             setHoveredEntry(entry);
                             setHoveredOriginalText(originalText);
@@ -148,7 +161,7 @@ const ContentOverlay: React.FC<ContentOverlayProps> = ({
         const entryEl = target.closest('[data-entry-id]');
         
         if (entryEl) {
-            // Cancel pending show (if hover trigger was active)
+            // Cancel pending show
             if (showTimer.current) {
                 clearTimeout(showTimer.current);
                 showTimer.current = null;
@@ -159,30 +172,33 @@ const ContentOverlay: React.FC<ContentOverlayProps> = ({
             hideTimer.current = setTimeout(() => {
                 setIsBubbleVisible(false);
                 setHoveredEntry(null);
-            }, 300); // 300ms grace period to move mouse to bubble
+            }, 300);
         }
      };
 
      // 2. Click / DoubleClick / RightClick Triggers
      const handleTriggerEvent = (e: MouseEvent, actionType: 'Click' | 'DoubleClick' | 'RightClick') => {
-         // Check if config matches this action
-         if (interactionConfig.mainTrigger.action !== actionType) return;
+         const config = interactionConfigRef.current;
+         
+         // STRICT CHECK: Action must match config
+         if (config.mainTrigger.action !== actionType) return;
          
          // Check modifier
-         if (!checkModifier(e, interactionConfig.mainTrigger.modifier)) return;
+         if (!checkModifier(e, config.mainTrigger.modifier)) return;
 
          const target = e.target as HTMLElement;
          const entryEl = target.closest('[data-entry-id]') as HTMLElement;
          
          if (entryEl) {
+             const currentEntries = entriesRef.current;
              const id = entryEl.getAttribute('data-entry-id');
              const originalText = entryEl.getAttribute('data-original-text') || '';
-             const entry = entries.find(w => w.id === id);
+             const entry = currentEntries.find(w => w.id === id);
              
              if (entry) {
-                 if (actionType === 'RightClick') e.preventDefault(); // Block default context menu
+                 if (actionType === 'RightClick') e.preventDefault();
 
-                 // Clear any pending timers
+                 // Clear timers
                  if (showTimer.current) clearTimeout(showTimer.current);
                  if (hideTimer.current) clearTimeout(hideTimer.current);
 
@@ -212,7 +228,7 @@ const ContentOverlay: React.FC<ContentOverlayProps> = ({
          document.removeEventListener('dblclick', handleDblClick);
          document.removeEventListener('contextmenu', handleContextMenu);
      };
-  }, [entries, interactionConfig, isBubbleVisible, hoveredEntry]);
+  }, []); // Bound ONCE, using refs for state
 
   // Handle Bubble Interaction (Keep Alive)
   const handleBubbleMouseEnter = () => {
@@ -265,7 +281,7 @@ const ContentOverlay: React.FC<ContentOverlayProps> = ({
           onMouseEnter={handleBubbleMouseEnter}
           onMouseLeave={handleBubbleMouseLeave}
           onAddWord={handleAddWordToLearning}
-          ttsSpeed={autoTranslateConfig.ttsSpeed} // Pass TTS Speed
+          ttsSpeed={autoTranslateConfig.ttsSpeed} 
        />
     </div>
   );
