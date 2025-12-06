@@ -1,9 +1,8 @@
 
 import React, { useState } from 'react';
-import { TranslationEngine, EngineType, WordEntry, StyleConfig, WordCategory, OriginalTextConfig } from '../../types';
+import { TranslationEngine, EngineType } from '../../types';
 import { Plus, GripVertical, RefreshCw, CheckCircle, WifiOff, Trash2, Globe, BrainCircuit, X } from 'lucide-react';
 import { callTencentTranslation } from '../../utils/api';
-import { PreviewSection } from './PreviewSection';
 
 // Simple Tooltip component internal to section
 const Tooltip: React.FC<{ text: string; children: React.ReactNode }> = ({ text, children }) => {
@@ -21,12 +20,9 @@ const Tooltip: React.FC<{ text: string; children: React.ReactNode }> = ({ text, 
 interface EnginesSectionProps {
     engines: TranslationEngine[];
     setEngines: React.Dispatch<React.SetStateAction<TranslationEngine[]>>;
-    entries: WordEntry[];
-    styles: Record<WordCategory, StyleConfig>;
-    originalTextConfig: OriginalTextConfig;
 }
 
-export const EnginesSection: React.FC<EnginesSectionProps> = ({ engines, setEngines, entries, styles, originalTextConfig }) => {
+export const EnginesSection: React.FC<EnginesSectionProps> = ({ engines, setEngines }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newEngineType, setNewEngineType] = useState<EngineType | null>(null);
   const [newEngineData, setNewEngineData] = useState<Partial<TranslationEngine>>({});
@@ -230,9 +226,6 @@ export const EnginesSection: React.FC<EnginesSectionProps> = ({ engines, setEngi
             </div>
           ))}
         </div>
-
-        {/* Real Effect Preview */}
-        <PreviewSection engines={engines} entries={entries} styles={styles} originalTextConfig={originalTextConfig} />
 
         {isModalOpen && (
           <div className="absolute inset-0 z-50 bg-slate-900/10 backdrop-blur-sm flex items-center justify-center p-4">

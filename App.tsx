@@ -1,12 +1,11 @@
 
-
-
 import React, { useState, useEffect } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { Dashboard } from './components/Dashboard';
 import { WordManager } from './components/WordManager';
 import { VisualStylesSection } from './components/StyleEditor';
 import { ScenariosSection, EnginesSection, InteractionSection, AnkiSection, PageWidgetSection, GeneralSection } from './components/Settings';
+import { PreviewSection } from './components/settings/PreviewSection'; // Import standalone Preview
 import { Loader2 } from 'lucide-react';
 import { AppView, SettingSectionId, Scenario, WordEntry, PageWidgetConfig, WordInteractionConfig, TranslationEngine, AnkiConfig, AutoTranslateConfig, StyleConfig, WordCategory, OriginalTextConfig } from './types';
 import { DEFAULT_STYLES, DEFAULT_ORIGINAL_TEXT_CONFIG, DEFAULT_WORD_INTERACTION, DEFAULT_PAGE_WIDGET, INITIAL_ENGINES, DEFAULT_ANKI_CONFIG, DEFAULT_AUTO_TRANSLATE, INITIAL_SCENARIOS } from './constants';
@@ -155,7 +154,17 @@ const App: React.FC = () => {
                 </section>
 
                 <section id="engines" className="scroll-mt-8">
-                  <EnginesSection engines={engines} setEngines={setEngines} entries={entries} styles={styles} originalTextConfig={originalTextConfig} />
+                  <EnginesSection engines={engines} setEngines={setEngines} />
+                </section>
+
+                <section id="preview" className="scroll-mt-8">
+                   <PreviewSection 
+                      engines={engines} 
+                      entries={entries} 
+                      styles={styles} 
+                      originalTextConfig={originalTextConfig} 
+                      autoTranslateConfig={autoTranslate}
+                   />
                 </section>
 
                 <section id="anki" className="scroll-mt-8">

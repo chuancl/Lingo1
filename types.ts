@@ -196,4 +196,4 @@ export interface MergeStrategyConfig {
 }
 
 export type AppView = 'dashboard' | 'words' | 'settings';
-export type SettingSectionId = 'general' | 'visual-styles' | 'scenarios' | 'word-bubble' | 'page-widget' | 'engines' | 'anki';
+export type SettingSectionId = 'general' | 'visual-styles' | 'scenarios' | 'word-bubble' | 'page-widget' | 'engines' | 'preview' | 'anki';

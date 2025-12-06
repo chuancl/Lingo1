@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { LayoutDashboard, BookOpen, Palette, Settings, Briefcase, MousePointerClick, Languages, Database, AppWindow, Sliders } from 'lucide-react';
+import { LayoutDashboard, BookOpen, Palette, Settings, Briefcase, MousePointerClick, Languages, Database, AppWindow, Sliders, Zap } from 'lucide-react';
 import { AppView, SettingSectionId } from '../types';
 
 interface SidebarProps {
@@ -24,6 +24,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange, onS
     { id: 'word-bubble', label: '单词交互气泡', icon: MousePointerClick },
     { id: 'page-widget', label: '悬浮球弹窗', icon: AppWindow },
     { id: 'engines', label: '翻译引擎', icon: Languages },
+    { id: 'preview', label: '真实效果预览', icon: Zap },
     { id: 'anki', label: 'Anki 集成', icon: Database },
   ] as const;
 
