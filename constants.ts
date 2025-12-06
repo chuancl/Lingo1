@@ -119,6 +119,7 @@ export const DEFAULT_PAGE_WIDGET: PageWidgetConfig = {
 
 export const DEFAULT_AUTO_TRANSLATE: AutoTranslateConfig = {
   enabled: true,
+  bilingualMode: false,
   blacklist: ['google.com', 'baidu.com'], // Removed .*\\.cn$ to allow Chinese sites
   whitelist: ['nytimes.com', 'medium.com'],
   ttsSpeed: 1.0,

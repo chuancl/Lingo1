@@ -346,6 +346,9 @@ export default defineContentScript({
     let currentEngines = await enginesStorage.getValue();
     let currentInteractionConfig = await interactionConfigStorage.getValue();
 
+    // Watch for config updates to ensure bilingual mode works dynamically
+    autoTranslateConfigStorage.watch((newVal) => { if(newVal) currentAutoTranslate = newVal; });
+
     // Auto fix blacklist
     if (currentAutoTranslate.blacklist.includes('.*\\.cn$')) {
         currentAutoTranslate.blacklist = currentAutoTranslate.blacklist.filter(s => s !== '.*\\.cn$');
@@ -502,7 +505,19 @@ export default defineContentScript({
         }
 
         private applyTranslation(block: HTMLElement, sourceText: string, translatedText: string) {
-            // Verification & Fuzzy Matching logic
+            // 1. New: Inject Bilingual Block (if enabled)
+            // We do this BEFORE word replacement logic, because even if no matches found, user might want to see the paragraph translation.
+            if (currentAutoTranslate.bilingualMode) {
+                // Prevent duplicate injection (simple check)
+                if (!block.nextElementSibling?.classList.contains('context-lingo-bilingual-block')) {
+                    const transBlock = document.createElement('div');
+                    transBlock.className = 'context-lingo-bilingual-block';
+                    transBlock.innerText = translatedText;
+                    block.after(transBlock);
+                }
+            }
+
+            // 2. Verification & Fuzzy Matching logic for Word Replacement
             const verifiedEntries = currentEntries.filter(entry => {
                 // Simple check: does the English word appear in the translation?
                 return translatedText.toLowerCase().includes(entry.text.toLowerCase());
@@ -645,5 +660,6 @@ export default defineContentScript({
     originalTextConfigStorage.watch((newVal) => { if(newVal) currentOriginalTextConfig = newVal; });
     entriesStorage.watch((newVal) => { if(newVal) currentEntries = newVal; });
     enginesStorage.watch((newVal) => { if(newVal) currentEngines = newVal; });
+    interactionConfigStorage.watch((newVal) => { if(newVal) currentInteractionConfig = newVal; });
   },
 });
