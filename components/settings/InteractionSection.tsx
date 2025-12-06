@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { WordInteractionConfig, InteractionTrigger, ModifierKey, MouseAction, BubblePosition } from '../../types';
 import { Volume2, Info, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Plus } from 'lucide-react';
@@ -113,7 +114,7 @@ export const InteractionSection: React.FC<InteractionSectionProps> = ({ config, 
       // Basic check for modifier (simplified for preview)
       const { modifier } = config.mainTrigger;
       
-      const domModifier = getDomModifier(modifier);
+      const domModifier = getDomModifier(modifier as ModifierKey);
       const isModifierMatch = !domModifier || e.getModifierState(domModifier);
 
       if (!isModifierMatch) return;
@@ -136,7 +137,7 @@ export const InteractionSection: React.FC<InteractionSectionProps> = ({ config, 
       if (config.mainTrigger.action === 'Hover') {
          // Check modifier if needed (though hover usually implies none or checked during move)
          const { modifier } = config.mainTrigger;
-         const domModifier = getDomModifier(modifier);
+         const domModifier = getDomModifier(modifier as ModifierKey);
          if (domModifier && !e.getModifierState(domModifier)) return;
 
          if (showTimer.current) clearTimeout(showTimer.current);

@@ -1,16 +1,11 @@
 
-
-
-
-
-
 import ReactDOM from 'react-dom/client';
 import React, { useState, useEffect, useRef } from 'react';
 import { PageWidget } from '../../components/PageWidget';
 import { WordBubble } from '../../components/WordBubble';
 import '../../index.css'; 
 import { entriesStorage, pageWidgetConfigStorage, autoTranslateConfigStorage, stylesStorage, originalTextConfigStorage, enginesStorage, interactionConfigStorage } from '../../utils/storage';
-import { WordEntry, PageWidgetConfig, WordInteractionConfig, WordCategory, AutoTranslateConfig } from '../../types';
+import { WordEntry, PageWidgetConfig, WordInteractionConfig, WordCategory, AutoTranslateConfig, ModifierKey } from '../../types';
 import { defineContentScript } from 'wxt/sandbox';
 import { createShadowRootUi } from 'wxt/client';
 import { findFuzzyMatches } from '../../utils/matching';
@@ -95,8 +90,19 @@ const ContentOverlay: React.FC<ContentOverlayProps> = ({
       };
   }, []);
 
+  // Helper for modifiers
+  const checkModifier = (e: MouseEvent, mod: ModifierKey) => {
+      if (mod === 'None') return true;
+      if (mod === 'Alt') return e.altKey;
+      if (mod === 'Ctrl') return e.ctrlKey || e.metaKey; // Windows Ctrl or Mac Cmd
+      if (mod === 'Shift') return e.shiftKey;
+      if (mod === 'Meta') return e.metaKey;
+      return true;
+  };
+
   // Global Event Listener for Bubbles
   useEffect(() => {
+     // 1. Mouse Over (Hover)
      const handleMouseOver = (e: MouseEvent) => {
          const target = e.target as HTMLElement;
          const entryEl = target.closest('[data-entry-id]') as HTMLElement;
@@ -107,7 +113,7 @@ const ContentOverlay: React.FC<ContentOverlayProps> = ({
              const entry = entries.find(w => w.id === id);
              
              if (entry) {
-                 // Cancel any pending hide action (e.g. moving from bubble back to word)
+                 // Always cancel any pending hide action when entering a valid word (keep alive logic)
                  if (hideTimer.current) {
                      clearTimeout(hideTimer.current);
                      hideTimer.current = null;
@@ -118,17 +124,21 @@ const ContentOverlay: React.FC<ContentOverlayProps> = ({
                      return;
                  }
 
-                 const delay = interactionConfig.mainTrigger.action === 'Hover' ? interactionConfig.mainTrigger.delay : 0;
-                 
-                 // If we have a pending show timer for another word, clear it
-                 if (showTimer.current) clearTimeout(showTimer.current);
-
-                 showTimer.current = setTimeout(() => {
-                    setHoveredEntry(entry);
-                    setHoveredOriginalText(originalText);
-                    setHoverTargetRect(entryEl.getBoundingClientRect());
-                    setIsBubbleVisible(true);
-                 }, delay);
+                 // Only trigger SHOW if configured action is 'Hover'
+                 if (interactionConfig.mainTrigger.action === 'Hover') {
+                     // Check modifier (e.g. Hover + Ctrl)
+                     if (checkModifier(e, interactionConfig.mainTrigger.modifier)) {
+                         if (showTimer.current) clearTimeout(showTimer.current);
+                         
+                         const delay = interactionConfig.mainTrigger.delay;
+                         showTimer.current = setTimeout(() => {
+                            setHoveredEntry(entry);
+                            setHoveredOriginalText(originalText);
+                            setHoverTargetRect(entryEl.getBoundingClientRect());
+                            setIsBubbleVisible(true);
+                         }, delay);
+                     }
+                 }
              }
          }
      };
@@ -138,7 +148,7 @@ const ContentOverlay: React.FC<ContentOverlayProps> = ({
         const entryEl = target.closest('[data-entry-id]');
         
         if (entryEl) {
-            // Cancel pending show
+            // Cancel pending show (if hover trigger was active)
             if (showTimer.current) {
                 clearTimeout(showTimer.current);
                 showTimer.current = null;
@@ -153,12 +163,54 @@ const ContentOverlay: React.FC<ContentOverlayProps> = ({
         }
      };
 
+     // 2. Click / DoubleClick / RightClick Triggers
+     const handleTriggerEvent = (e: MouseEvent, actionType: 'Click' | 'DoubleClick' | 'RightClick') => {
+         // Check if config matches this action
+         if (interactionConfig.mainTrigger.action !== actionType) return;
+         
+         // Check modifier
+         if (!checkModifier(e, interactionConfig.mainTrigger.modifier)) return;
+
+         const target = e.target as HTMLElement;
+         const entryEl = target.closest('[data-entry-id]') as HTMLElement;
+         
+         if (entryEl) {
+             const id = entryEl.getAttribute('data-entry-id');
+             const originalText = entryEl.getAttribute('data-original-text') || '';
+             const entry = entries.find(w => w.id === id);
+             
+             if (entry) {
+                 if (actionType === 'RightClick') e.preventDefault(); // Block default context menu
+
+                 // Clear any pending timers
+                 if (showTimer.current) clearTimeout(showTimer.current);
+                 if (hideTimer.current) clearTimeout(hideTimer.current);
+
+                 // Show immediately
+                 setHoveredEntry(entry);
+                 setHoveredOriginalText(originalText);
+                 setHoverTargetRect(entryEl.getBoundingClientRect());
+                 setIsBubbleVisible(true);
+             }
+         }
+     };
+
+     const handleClick = (e: MouseEvent) => handleTriggerEvent(e, 'Click');
+     const handleDblClick = (e: MouseEvent) => handleTriggerEvent(e, 'DoubleClick');
+     const handleContextMenu = (e: MouseEvent) => handleTriggerEvent(e, 'RightClick');
+
      document.addEventListener('mouseover', handleMouseOver);
      document.addEventListener('mouseout', handleMouseOut);
+     document.addEventListener('click', handleClick);
+     document.addEventListener('dblclick', handleDblClick);
+     document.addEventListener('contextmenu', handleContextMenu);
 
      return () => {
          document.removeEventListener('mouseover', handleMouseOver);
          document.removeEventListener('mouseout', handleMouseOut);
+         document.removeEventListener('click', handleClick);
+         document.removeEventListener('dblclick', handleDblClick);
+         document.removeEventListener('contextmenu', handleContextMenu);
      };
   }, [entries, interactionConfig, isBubbleVisible, hoveredEntry]);
 
