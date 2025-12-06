@@ -1,9 +1,4 @@
-
-
-
-
-
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { WordInteractionConfig, InteractionTrigger, ModifierKey, MouseAction, BubblePosition } from '../../types';
 import { Volume2, Info, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Plus } from 'lucide-react';
 import { playTextToSpeech } from '../../utils/audio';
@@ -18,6 +13,13 @@ const Tooltip: React.FC<{ text: string; children: React.ReactNode }> = ({ text, 
       </div>
     </div>
   );
+};
+
+// Helper to map custom ModifierKey to DOM values
+const getDomModifier = (m: ModifierKey): string | null => {
+  if (m === 'None') return null;
+  if (m === 'Ctrl') return 'Control';
+  return m;
 };
 
 const TriggerInput = ({ label, value, onChange }: { label: string, value: InteractionTrigger, onChange: (val: InteractionTrigger) => void }) => {
@@ -93,7 +95,86 @@ interface InteractionSectionProps {
 
 export const InteractionSection: React.FC<InteractionSectionProps> = ({ config, setConfig }) => {
   
-  // Dynamic positioning for the preview bubble
+  // State for preview interaction simulation
+  const [isPreviewVisible, setIsPreviewVisible] = useState(false);
+  const showTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Clear timers on unmount
+  useEffect(() => {
+    return () => {
+      if (showTimer.current) clearTimeout(showTimer.current);
+      if (hideTimer.current) clearTimeout(hideTimer.current);
+    };
+  }, []);
+
+  // --- Trigger Simulation Logic ---
+  const handleTrigger = (action: MouseAction, e: React.MouseEvent) => {
+      // Basic check for modifier (simplified for preview)
+      const { modifier } = config.mainTrigger;
+      
+      const domModifier = getDomModifier(modifier);
+      const isModifierMatch = !domModifier || e.getModifierState(domModifier);
+
+      if (!isModifierMatch) return;
+
+      if (config.mainTrigger.action === action) {
+          e.preventDefault(); // For right click
+          if (action !== 'Hover') {
+             setIsPreviewVisible(prev => !prev);
+          }
+      }
+  };
+
+  const onMouseEnter = (e: React.MouseEvent) => {
+      // Clear any pending hide
+      if (hideTimer.current) {
+          clearTimeout(hideTimer.current);
+          hideTimer.current = null;
+      }
+
+      if (config.mainTrigger.action === 'Hover') {
+         // Check modifier if needed (though hover usually implies none or checked during move)
+         const { modifier } = config.mainTrigger;
+         const domModifier = getDomModifier(modifier);
+         if (domModifier && !e.getModifierState(domModifier)) return;
+
+         if (showTimer.current) clearTimeout(showTimer.current);
+         showTimer.current = setTimeout(() => {
+             setIsPreviewVisible(true);
+         }, config.mainTrigger.delay);
+      }
+  };
+
+  const onMouseLeave = () => {
+      if (showTimer.current) {
+          clearTimeout(showTimer.current);
+          showTimer.current = null;
+      }
+      
+      // Delay hiding to allow moving to bubble (simulated)
+      if (hideTimer.current) clearTimeout(hideTimer.current);
+      hideTimer.current = setTimeout(() => {
+          setIsPreviewVisible(false);
+      }, 300);
+  };
+
+  const onBubbleEnter = () => {
+      if (hideTimer.current) {
+          clearTimeout(hideTimer.current);
+          hideTimer.current = null;
+      }
+  };
+
+  const onBubbleLeave = () => {
+      if (hideTimer.current) clearTimeout(hideTimer.current);
+      hideTimer.current = setTimeout(() => {
+          setIsPreviewVisible(false);
+      }, 300);
+  };
+
+  // --- Layout & Styles ---
+
   const getPreviewPositionClass = (pos: BubblePosition) => {
      switch(pos) {
          case 'top': return 'bottom-full left-1/2 -translate-x-1/2 mb-3';
@@ -112,6 +193,20 @@ export const InteractionSection: React.FC<InteractionSectionProps> = ({ config, 
          case 'right': return 'left-[-6px] top-[calc(50%-6px)] border-t-transparent border-r-transparent';
          default: return 'bottom-[-6px] left-[calc(50%-6px)]';
      }
+  };
+
+  // Shift the word to make room for the bubble in the preview container
+  const getWordShiftClass = (pos: BubblePosition) => {
+      // If bubble is LEFT, move word RIGHT (translate-x).
+      // If bubble is RIGHT, move word LEFT (-translate-x).
+      // Use larger values to ensure bubble doesn't get clipped by overflow:hidden if container had it (though here it's flex)
+      switch(pos) {
+          case 'left': return 'translate-x-24';
+          case 'right': return '-translate-x-24';
+          case 'top': return 'translate-y-16'; 
+          case 'bottom': return '-translate-y-16';
+          default: return '';
+      }
   };
 
   return (
@@ -213,61 +308,83 @@ export const InteractionSection: React.FC<InteractionSectionProps> = ({ config, 
 
            {/* Preview Bubble */}
            <div className="flex flex-col">
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">样式预览</h3>
-              <div className="flex-1 bg-slate-50 border border-slate-200 rounded-lg p-8 flex items-center justify-center relative overflow-hidden min-h-[300px]">
-                 <div className="absolute inset-0 grid grid-cols-[1fr_20px_1fr] grid-rows-[1fr_20px_1fr] opacity-5">
+              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex justify-between">
+                 <span>交互效果预览</span>
+                 <span className="text-[10px] font-normal text-blue-500 normal-case bg-blue-50 px-2 py-0.5 rounded">
+                     试试 {config.mainTrigger.action === 'Hover' ? `悬浮 ${config.mainTrigger.delay}ms` : '点击'} 下面的单词
+                 </span>
+              </h3>
+              <div className="flex-1 bg-slate-50 border border-slate-200 rounded-lg p-8 flex items-center justify-center relative overflow-hidden min-h-[360px]">
+                 <div className="absolute inset-0 grid grid-cols-[1fr_20px_1fr] grid-rows-[1fr_20px_1fr] opacity-5 pointer-events-none">
                     <div className="border-r border-slate-900 col-start-2 row-span-3"></div>
                     <div className="border-b border-slate-900 row-start-2 col-span-3"></div>
                  </div>
                  
-                 <div className="relative">
-                    <span className="text-xl font-serif text-slate-800 cursor-pointer border-b-2 border-red-200">ephemeral</span>
+                 <div 
+                    className={`relative transition-transform duration-300 ${getWordShiftClass(config.bubblePosition)}`}
+                 >
+                    <span 
+                        className="text-xl font-serif text-slate-800 cursor-pointer border-b-2 border-red-200 select-none"
+                        onMouseEnter={onMouseEnter}
+                        onMouseLeave={onMouseLeave}
+                        onClick={(e) => handleTrigger('Click', e)}
+                        onDoubleClick={(e) => handleTrigger('DoubleClick', e)}
+                        onContextMenu={(e) => handleTrigger('RightClick', e)}
+                    >
+                        ephemeral
+                    </span>
                     
                     {/* The Bubble - Dynamically Positioned */}
-                    <div className={`absolute w-64 bg-white rounded-lg shadow-xl border border-slate-200 p-5 z-10 transition-all duration-300 ${getPreviewPositionClass(config.bubblePosition)}`}>
-                       
-                       {/* Arrow - Dynamically Positioned */}
-                       <div className={`absolute w-3 h-3 bg-white border border-slate-200 transform rotate-45 z-[-1] ${getArrowClass(config.bubblePosition)}`}></div>
+                    {isPreviewVisible && (
+                        <div 
+                            className={`absolute w-64 bg-white rounded-lg shadow-xl border border-slate-200 p-5 z-10 transition-all duration-300 animate-in fade-in zoom-in-95 ${getPreviewPositionClass(config.bubblePosition)}`}
+                            onMouseEnter={onBubbleEnter}
+                            onMouseLeave={onBubbleLeave}
+                        >
+                        
+                            {/* Arrow - Dynamically Positioned */}
+                            <div className={`absolute w-3 h-3 bg-white border border-slate-200 transform rotate-45 z-[-1] ${getArrowClass(config.bubblePosition)}`}></div>
 
-                       <div className="flex justify-between items-start mb-3">
-                          <div>
-                             <h4 className="font-bold text-xl text-slate-900 leading-tight mb-1">ephemeral</h4>
-                             {config.showPhonetic && <span className="text-xs text-slate-400 font-mono block">/əˈfem(ə)rəl/</span>}
-                          </div>
-                          <div className="flex gap-2">
-                             <button 
-                                 className="text-slate-400 hover:text-blue-600 p-1.5 rounded-full transition-colors bg-transparent"
-                                 onClick={() => playTextToSpeech("ephemeral", config.autoPronounceAccent, 1.0, 1)}
-                                 title="点击播放"
-                             >
-                                 <Volume2 className="w-4 h-4"/>
-                             </button>
-                             <button 
-                                 className="text-blue-600 bg-blue-50 hover:bg-blue-100 p-1.5 rounded-full transition-colors"
-                                 title="添加到正在学"
-                             >
-                                 <Plus className="w-4 h-4"/>
-                             </button>
-                          </div>
-                       </div>
-                       
-                       {config.showDictTranslation && (
-                          <div className="text-sm text-slate-700 font-medium mb-3 leading-snug">adj. 短暂的；朝生暮死的</div>
-                       )}
+                            <div className="flex justify-between items-start mb-3">
+                                <div>
+                                    <h4 className="font-bold text-xl text-slate-900 leading-tight mb-1">ephemeral</h4>
+                                    {config.showPhonetic && <span className="text-xs text-slate-400 font-mono block">/əˈfem(ə)rəl/</span>}
+                                </div>
+                                <div className="flex gap-2">
+                                    <button 
+                                        className="text-slate-400 hover:text-blue-600 p-1.5 rounded-full transition-colors bg-transparent"
+                                        onClick={() => playTextToSpeech("ephemeral", config.autoPronounceAccent, 1.0, 1)}
+                                        title="点击播放"
+                                    >
+                                        <Volume2 className="w-4 h-4"/>
+                                    </button>
+                                    <button 
+                                        className="text-blue-600 bg-blue-50 hover:bg-blue-100 p-1.5 rounded-full transition-colors"
+                                        title="添加到正在学"
+                                    >
+                                        <Plus className="w-4 h-4"/>
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            {config.showDictTranslation && (
+                                <div className="text-sm text-slate-700 font-medium mb-3 leading-snug">adj. 短暂的；朝生暮死的</div>
+                            )}
 
-                       {config.showOriginalText && (
-                          <div className="flex items-center text-xs text-slate-500 bg-slate-50 px-3 py-1.5 rounded-md mb-3 border border-slate-100">
-                             <span className="mr-2 text-slate-400">原文:</span>
-                             <span className="text-slate-700 font-medium">短暂的</span>
-                          </div>
-                       )}
+                            {config.showOriginalText && (
+                                <div className="flex items-center text-xs text-slate-500 bg-slate-50 px-3 py-1.5 rounded-md mb-3 border border-slate-100">
+                                    <span className="mr-2 text-slate-400">原文:</span>
+                                    <span className="text-slate-700 font-medium">短暂的</span>
+                                </div>
+                            )}
 
-                       {config.showDictExample && (
-                          <div className="text-xs text-slate-600 italic border-l-2 border-blue-400 pl-3 py-0.5 leading-relaxed cursor-pointer hover:text-blue-600" onClick={() => playTextToSpeech("Her success was ephemeral", config.autoPronounceAccent)}>
-                             Her success was ephemeral.
-                          </div>
-                       )}
-                    </div>
+                            {config.showDictExample && (
+                                <div className="text-xs text-slate-600 italic border-l-2 border-blue-400 pl-3 py-0.5 leading-relaxed cursor-pointer hover:text-blue-600" onClick={() => playTextToSpeech("Her success was ephemeral", config.autoPronounceAccent)}>
+                                    Her success was ephemeral.
+                                </div>
+                            )}
+                        </div>
+                    )}
                  </div>
               </div>
            </div>
