@@ -193,17 +193,31 @@ export const WordManager: React.FC<WordManagerProps> = ({ scenarios, entries, se
   };
 
   const handleExport = () => {
-     const dataToExport = filteredEntries;
+     let dataToExport: WordEntry[];
+     
+     // If words are selected, export only those. Otherwise export current view.
+     if (selectedWords.size > 0) {
+        dataToExport = entries.filter(e => selectedWords.has(e.id));
+     } else {
+        dataToExport = filteredEntries;
+     }
+
+     if (dataToExport.length === 0) {
+        showToast('当前列表为空，无法导出', 'warning');
+        return;
+     }
+
      const blob = new Blob([JSON.stringify(dataToExport, null, 2)], { type: 'application/json' });
      const url = URL.createObjectURL(blob);
      const a = document.createElement('a');
      a.href = url;
-     a.download = `contextlingo_export_${activeTab}_${Date.now()}.json`;
+     const prefix = selectedWords.size > 0 ? 'selected' : activeTab;
+     a.download = `contextlingo_export_${prefix}_${dataToExport.length}words_${Date.now()}.json`;
      document.body.appendChild(a);
      a.click();
      document.body.removeChild(a);
      URL.revokeObjectURL(url);
-     showToast('导出成功', 'success');
+     showToast(`成功导出 ${dataToExport.length} 个单词`, 'success');
   };
 
   const triggerImport = () => {
@@ -508,6 +522,11 @@ export const WordManager: React.FC<WordManagerProps> = ({ scenarios, entries, se
                     )}
                     
                     <div className="w-px h-6 bg-slate-300 mx-2"></div>
+
+                    {/* Export Selected Button */}
+                    <button onClick={handleExport} className="flex items-center px-3 py-1.5 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition animate-in slide-in-from-right-2">
+                        <Download className="w-4 h-4 mr-2" /> 导出 ({selectedWords.size})
+                    </button>
                     
                     <button onClick={handleDeleteSelected} className="flex items-center px-3 py-1.5 text-sm text-red-600 bg-red-50 hover:bg-red-100 border border-red-100 rounded-lg transition animate-in slide-in-from-right-2">
                         <Trash2 className="w-4 h-4 mr-2" /> 删除 ({selectedWords.size})
