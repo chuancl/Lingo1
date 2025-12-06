@@ -140,6 +140,10 @@ export interface WordInteractionConfig {
   autoPronounce: boolean;
   autoPronounceAccent: 'US' | 'UK';
   autoPronounceCount: number;
+
+  // New Fields
+  dismissDelay: number; // ms to wait before hiding bubble
+  allowMultipleBubbles: boolean; // if true, new bubbles don't close old ones
 }
 
 export type PopupCardField = 'context' | 'mixed' | 'dictExample';

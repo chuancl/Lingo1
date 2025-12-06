@@ -109,20 +109,32 @@ export const InteractionSection: React.FC<InteractionSectionProps> = ({ config, 
     };
   }, []);
 
+  // Handle Auto Pronounce in Preview
+  useEffect(() => {
+      if (isPreviewVisible && config.autoPronounce && config.autoPronounceCount > 0) {
+          playTextToSpeech("ephemeral", config.autoPronounceAccent, 1.0, config.autoPronounceCount);
+      }
+  }, [isPreviewVisible, config.autoPronounce, config.autoPronounceCount, config.autoPronounceAccent]);
+
   // --- Trigger Simulation Logic ---
   const handleTrigger = (action: MouseAction, e: React.MouseEvent) => {
       // Basic check for modifier (simplified for preview)
       const { modifier } = config.mainTrigger;
       
       const domModifier = getDomModifier(modifier);
-      const isModifierMatch = !domModifier || e.getModifierState(domModifier);
+      // Casting to any to satisfy React's strict ModifierKey type for getModifierState
+      const isModifierMatch = !domModifier || e.getModifierState(domModifier as any);
 
       if (!isModifierMatch) return;
 
       if (config.mainTrigger.action === action) {
           e.preventDefault(); // For right click
           if (action !== 'Hover') {
-             setIsPreviewVisible(prev => !prev);
+             if (!isPreviewVisible) {
+                setIsPreviewVisible(true);
+             } else {
+                setIsPreviewVisible(false);
+             }
           }
       }
   };
@@ -138,7 +150,8 @@ export const InteractionSection: React.FC<InteractionSectionProps> = ({ config, 
          // Check modifier if needed (though hover usually implies none or checked during move)
          const { modifier } = config.mainTrigger;
          const domModifier = getDomModifier(modifier);
-         if (domModifier && !e.getModifierState(domModifier)) return;
+         // Casting to any to satisfy React's strict ModifierKey type for getModifierState
+         if (domModifier && !e.getModifierState(domModifier as any)) return;
 
          if (showTimer.current) clearTimeout(showTimer.current);
          showTimer.current = setTimeout(() => {
@@ -153,11 +166,11 @@ export const InteractionSection: React.FC<InteractionSectionProps> = ({ config, 
           showTimer.current = null;
       }
       
-      // Delay hiding to allow moving to bubble (simulated)
+      // Delay hiding using configured delay
       if (hideTimer.current) clearTimeout(hideTimer.current);
       hideTimer.current = setTimeout(() => {
           setIsPreviewVisible(false);
-      }, 300);
+      }, config.dismissDelay || 300);
   };
 
   const onBubbleEnter = () => {
@@ -171,7 +184,7 @@ export const InteractionSection: React.FC<InteractionSectionProps> = ({ config, 
       if (hideTimer.current) clearTimeout(hideTimer.current);
       hideTimer.current = setTimeout(() => {
           setIsPreviewVisible(false);
-      }, 300);
+      }, config.dismissDelay || 300);
   };
 
   // --- Layout & Styles ---
@@ -303,6 +316,27 @@ export const InteractionSection: React.FC<InteractionSectionProps> = ({ config, 
                         <input type="checkbox" checked={config.showDictTranslation} onChange={e => setConfig({...config, showDictTranslation: e.target.checked})} className="rounded text-blue-600 mr-3"/>
                         <span className="text-sm">显示释义</span>
                     </label>
+                  </div>
+                  
+                  {/* Dismiss Delay & Multiple Bubbles */}
+                  <div className="mt-4 grid grid-cols-2 gap-4">
+                      <div className="p-3 border rounded-lg bg-slate-50">
+                          <label className="text-[10px] text-slate-500 block mb-1">气泡消失延迟 (ms)</label>
+                          <input 
+                              type="number" 
+                              step="100" min="0" 
+                              value={config.dismissDelay || 300}
+                              onChange={(e) => setConfig({...config, dismissDelay: parseInt(e.target.value)})}
+                              className="w-full text-sm border-slate-300 rounded focus:ring-blue-500"
+                          />
+                      </div>
+                      <div className="flex items-center p-3 border rounded-lg cursor-pointer hover:bg-slate-50">
+                          <input type="checkbox" checked={config.allowMultipleBubbles || false} onChange={e => setConfig({...config, allowMultipleBubbles: e.target.checked})} className="rounded text-blue-600 mr-3"/>
+                          <div className="flex flex-col">
+                             <span className="text-sm">允许同时存在多个气泡</span>
+                             <span className="text-[10px] text-slate-400">开启后新气泡不关闭旧气泡</span>
+                          </div>
+                      </div>
                   </div>
               </div>
            </div>

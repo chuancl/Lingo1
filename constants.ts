@@ -83,6 +83,8 @@ export const DEFAULT_WORD_INTERACTION: WordInteractionConfig = {
   autoPronounce: true,
   autoPronounceAccent: 'US',
   autoPronounceCount: 1,
+  dismissDelay: 300,
+  allowMultipleBubbles: false,
 };
 
 export const DEFAULT_PAGE_WIDGET: PageWidgetConfig = {

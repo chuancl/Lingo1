@@ -1,4 +1,5 @@
 
+
 import ReactDOM from 'react-dom/client';
 import React, { useState, useEffect, useRef } from 'react';
 import { PageWidget } from '../../components/PageWidget';
@@ -21,6 +22,13 @@ interface ContentOverlayProps {
   initialAutoTranslateConfig: AutoTranslateConfig; // New Prop
 }
 
+interface ActiveBubble {
+    id: string; // entry.id
+    entry: WordEntry;
+    originalText: string;
+    rect: DOMRect;
+}
+
 const ContentOverlay: React.FC<ContentOverlayProps> = ({ 
     initialWidgetConfig, 
     initialEntries, 
@@ -35,25 +43,22 @@ const ContentOverlay: React.FC<ContentOverlayProps> = ({
   // Widget Logic
   const [pageWords, setPageWords] = useState<WordEntry[]>([]);
 
-  // Bubble Logic
-  const [hoveredEntry, setHoveredEntry] = useState<WordEntry | null>(null);
-  const [hoveredOriginalText, setHoveredOriginalText] = useState<string>("");
-  const [hoverTargetRect, setHoverTargetRect] = useState<DOMRect | null>(null);
-  const [isBubbleVisible, setIsBubbleVisible] = useState(false);
+  // Bubble Logic: Now supporting multiple active bubbles
+  const [activeBubbles, setActiveBubbles] = useState<ActiveBubble[]>([]);
   
+  // Timers
   const showTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Map of hide timers: Bubble ID -> Timeout
+  const hideTimers = useRef<Map<string, NodeJS.Timeout>>(new Map());
 
   // --- Refs for Event Listeners (Fix Stale Closures) ---
   const interactionConfigRef = useRef(interactionConfig);
   const entriesRef = useRef(entries);
-  const isBubbleVisibleRef = useRef(isBubbleVisible);
-  const hoveredEntryRef = useRef(hoveredEntry);
+  const activeBubblesRef = useRef(activeBubbles);
 
   useEffect(() => { interactionConfigRef.current = interactionConfig; }, [interactionConfig]);
   useEffect(() => { entriesRef.current = entries; }, [entries]);
-  useEffect(() => { isBubbleVisibleRef.current = isBubbleVisible; }, [isBubbleVisible]);
-  useEffect(() => { hoveredEntryRef.current = hoveredEntry; }, [hoveredEntry]);
+  useEffect(() => { activeBubblesRef.current = activeBubbles; }, [activeBubbles]);
 
   useEffect(() => {
     // Sync Storage Listeners
@@ -71,15 +76,20 @@ const ContentOverlay: React.FC<ContentOverlayProps> = ({
     return () => unsubs.forEach(u => u());
   }, [entries]);
 
-  // Keep hoveredEntry up to date if entries change (e.g. category update)
+  // Update bubbles if entries change (e.g. category update)
   useEffect(() => {
-      if (hoveredEntry) {
-          const updated = entries.find(e => e.id === hoveredEntry.id);
-          if (updated && updated.category !== hoveredEntry.category) {
-              setHoveredEntry(updated);
-          }
+      if (activeBubbles.length > 0) {
+          const newBubbles = activeBubbles.map(b => {
+              const updatedEntry = entries.find(e => e.id === b.id);
+              return updatedEntry ? { ...b, entry: updatedEntry } : b;
+          });
+          // Only update state if something actually changed deep inside
+          // For simplicity, we can just set it, React will diff
+          // But to avoid loops, let's be careful.
+          // Actually, since this runs on [entries] change, it's fine.
+          setActiveBubbles(newBubbles);
       }
-  }, [entries, hoveredEntry]);
+  }, [entries]);
 
   // --- Audio Unlocker ---
   useEffect(() => {
@@ -108,15 +118,54 @@ const ContentOverlay: React.FC<ContentOverlayProps> = ({
       return true;
   };
 
+  const addBubble = (entry: WordEntry, originalText: string, rect: DOMRect) => {
+      const config = interactionConfigRef.current;
+      
+      // If this bubble was pending removal, cancel the removal
+      if (hideTimers.current.has(entry.id)) {
+          clearTimeout(hideTimers.current.get(entry.id)!);
+          hideTimers.current.delete(entry.id);
+      }
+
+      setActiveBubbles(prev => {
+          // Check if bubble already exists
+          const exists = prev.find(b => b.id === entry.id);
+          
+          if (!config.allowMultipleBubbles) {
+              // Single Mode:
+              // If it's the exact same bubble, do nothing
+              if (prev.length === 1 && exists) return prev;
+              // Otherwise replace everything with new bubble
+              return [{ id: entry.id, entry, originalText, rect }];
+          } else {
+              // Multiple Mode:
+              if (exists) return prev; // Already open
+              return [...prev, { id: entry.id, entry, originalText, rect }];
+          }
+      });
+  };
+
+  const scheduleRemoveBubble = (id: string) => {
+      const config = interactionConfigRef.current;
+      
+      // Clear any existing timer for this ID to restart
+      if (hideTimers.current.has(id)) clearTimeout(hideTimers.current.get(id)!);
+
+      const timer = setTimeout(() => {
+          setActiveBubbles(prev => prev.filter(b => b.id !== id));
+          hideTimers.current.delete(id);
+      }, config.dismissDelay || 300);
+
+      hideTimers.current.set(id, timer);
+  };
+
   // Global Event Listener for Bubbles (Using Refs)
   useEffect(() => {
      // 1. Mouse Over (Hover)
      const handleMouseOver = (e: MouseEvent) => {
          const config = interactionConfigRef.current;
          const currentEntries = entriesRef.current;
-         const isVisible = isBubbleVisibleRef.current;
-         const currentHovered = hoveredEntryRef.current;
-
+         
          const target = e.target as HTMLElement;
          const entryEl = target.closest('[data-entry-id]') as HTMLElement;
          
@@ -125,17 +174,16 @@ const ContentOverlay: React.FC<ContentOverlayProps> = ({
              const originalText = entryEl.getAttribute('data-original-text') || '';
              const entry = currentEntries.find(w => w.id === id);
              
-             if (entry) {
-                 // Always cancel any pending hide action when entering a valid word
-                 if (hideTimer.current) {
-                     clearTimeout(hideTimer.current);
-                     hideTimer.current = null;
+             if (entry && id) {
+                 // Cancel hide timer if entering a word that is about to close
+                 if (hideTimers.current.has(id)) {
+                     clearTimeout(hideTimers.current.get(id)!);
+                     hideTimers.current.delete(id);
                  }
                  
-                 // If already visible and same entry, do nothing
-                 if (isVisible && currentHovered?.id === entry.id) {
-                     return;
-                 }
+                 // If allowMultiple is false, and this entry is NOT the current one, 
+                 // we might want to switch immediately (Hot Swap logic).
+                 // But we have the delay first.
 
                  // Only trigger SHOW if configured action is 'Hover'
                  if (config.mainTrigger.action === 'Hover') {
@@ -145,10 +193,7 @@ const ContentOverlay: React.FC<ContentOverlayProps> = ({
                          
                          const delay = config.mainTrigger.delay;
                          showTimer.current = setTimeout(() => {
-                            setHoveredEntry(entry);
-                            setHoveredOriginalText(originalText);
-                            setHoverTargetRect(entryEl.getBoundingClientRect());
-                            setIsBubbleVisible(true);
+                            addBubble(entry, originalText, entryEl.getBoundingClientRect());
                          }, delay);
                      }
                  }
@@ -161,18 +206,17 @@ const ContentOverlay: React.FC<ContentOverlayProps> = ({
         const entryEl = target.closest('[data-entry-id]');
         
         if (entryEl) {
+            const id = entryEl.getAttribute('data-entry-id');
             // Cancel pending show
             if (showTimer.current) {
                 clearTimeout(showTimer.current);
                 showTimer.current = null;
             }
 
-            // Start hiding sequence
-            if (hideTimer.current) clearTimeout(hideTimer.current);
-            hideTimer.current = setTimeout(() => {
-                setIsBubbleVisible(false);
-                setHoveredEntry(null);
-            }, 300);
+            // Start hiding sequence for THIS specific ID
+            if (id) {
+                scheduleRemoveBubble(id);
+            }
         }
      };
 
@@ -198,15 +242,11 @@ const ContentOverlay: React.FC<ContentOverlayProps> = ({
              if (entry) {
                  if (actionType === 'RightClick') e.preventDefault();
 
-                 // Clear timers
+                 // Clear pending show timer
                  if (showTimer.current) clearTimeout(showTimer.current);
-                 if (hideTimer.current) clearTimeout(hideTimer.current);
-
+                 
                  // Show immediately
-                 setHoveredEntry(entry);
-                 setHoveredOriginalText(originalText);
-                 setHoverTargetRect(entryEl.getBoundingClientRect());
-                 setIsBubbleVisible(true);
+                 addBubble(entry, originalText, entryEl.getBoundingClientRect());
              }
          }
      };
@@ -231,19 +271,15 @@ const ContentOverlay: React.FC<ContentOverlayProps> = ({
   }, []); // Bound ONCE, using refs for state
 
   // Handle Bubble Interaction (Keep Alive)
-  const handleBubbleMouseEnter = () => {
-      if (hideTimer.current) {
-          clearTimeout(hideTimer.current);
-          hideTimer.current = null;
+  const handleBubbleMouseEnter = (id: string) => {
+      if (hideTimers.current.has(id)) {
+          clearTimeout(hideTimers.current.get(id)!);
+          hideTimers.current.delete(id);
       }
   };
 
-  const handleBubbleMouseLeave = () => {
-      if (hideTimer.current) clearTimeout(hideTimer.current);
-      hideTimer.current = setTimeout(() => {
-          setIsBubbleVisible(false);
-          setHoveredEntry(null);
-      }, 300);
+  const handleBubbleMouseLeave = (id: string) => {
+      scheduleRemoveBubble(id);
   };
 
   const handleAddWordToLearning = async (id: string) => {
@@ -271,18 +307,21 @@ const ContentOverlay: React.FC<ContentOverlayProps> = ({
           setPageWords={setPageWords}
        />
 
-       {/* 2. Word Interaction Bubble */}
-       <WordBubble 
-          entry={hoveredEntry}
-          originalText={hoveredOriginalText}
-          targetRect={hoverTargetRect}
-          config={interactionConfig}
-          isVisible={isBubbleVisible}
-          onMouseEnter={handleBubbleMouseEnter}
-          onMouseLeave={handleBubbleMouseLeave}
-          onAddWord={handleAddWordToLearning}
-          ttsSpeed={autoTranslateConfig.ttsSpeed} 
-       />
+       {/* 2. Word Interaction Bubbles (Multiple) */}
+       {activeBubbles.map(bubble => (
+           <WordBubble 
+              key={bubble.id}
+              entry={bubble.entry}
+              originalText={bubble.originalText}
+              targetRect={bubble.rect}
+              config={interactionConfig}
+              isVisible={true} // Visibility is managed by existence in the list now
+              onMouseEnter={() => handleBubbleMouseEnter(bubble.id)}
+              onMouseLeave={() => handleBubbleMouseLeave(bubble.id)}
+              onAddWord={handleAddWordToLearning}
+              ttsSpeed={autoTranslateConfig.ttsSpeed} 
+           />
+       ))}
     </div>
   );
 };

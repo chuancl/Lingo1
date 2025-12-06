@@ -1,4 +1,5 @@
 
+
 import React, { useEffect, useState, useRef } from 'react';
 import { WordEntry, WordInteractionConfig, WordCategory } from '../types';
 import { Volume2, Plus, Check } from 'lucide-react';
@@ -23,7 +24,7 @@ export const WordBubble: React.FC<WordBubbleProps> = ({
     config, 
     isVisible, 
     onMouseEnter, 
-    onMouseLeave,
+    onMouseLeave, 
     onAddWord,
     ttsSpeed = 1.0
 }) => {
@@ -44,12 +45,16 @@ export const WordBubble: React.FC<WordBubbleProps> = ({
       hasAutoPlayedRef.current = false;
   }, [entry?.id]);
 
-  // Stop audio immediately if bubble becomes invisible
+  // Stop audio immediately if bubble becomes invisible or UNMOUNTS
   useEffect(() => {
     if (!isVisible) {
       stopAudio();
       hasAutoPlayedRef.current = false;
     }
+    // Cleanup on unmount
+    return () => {
+       stopAudio();
+    };
   }, [isVisible]);
 
   // Handle Auto Pronounce
